@@ -29,6 +29,7 @@ const (
 
 var (
 	html5BlockStartTagPattern = regexp.MustCompile(`(?is)<html5-block\b[^>]*>`)
+	html5BlockElementPattern  = regexp.MustCompile(`(?is)<html5-block\b[^>]*>(.*?)</html5-block>`)
 	html5BlockSafeNamePattern = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
 )
 
@@ -85,6 +86,9 @@ func prepareHTML5BlockWriteContent(runtime *common.RuntimeContext, format string
 	if !strings.Contains(content, "<html5-block") {
 		return content, "", nil
 	}
+	if err := validateHTML5BlockWriteElementBodies(format, content); err != nil {
+		return "", "", err
+	}
 
 	resources := html5BlockResourceMap{html5BlockTag: map[string]html5BlockResourceEntry{}}
 	nextRef := 1
@@ -113,7 +117,7 @@ func prepareHTML5BlockWriteContent(runtime *common.RuntimeContext, format string
 			}
 			data, err := cmdutil.ReadInputFile(runtime.FileIO(), relPath)
 			if err != nil {
-				return "", common.ValidationErrorf("html5-block path %q cannot be read: %v", relPath, err).WithParam("path").WithCause(err)
+				return "", common.ValidationErrorf("html5-block path %q cannot be read from the current working directory; check that the file exists relative to where lark-cli is running: %v", relPath, err).WithParam("path").WithCause(err)
 			}
 
 			ref := fmt.Sprintf("html5_%d", nextRef)
@@ -156,6 +160,35 @@ func prepareHTML5BlockWriteContent(runtime *common.RuntimeContext, format string
 		return "", "", err
 	}
 	return out, rawResources, nil
+}
+
+func validateHTML5BlockWriteElementBodies(format string, content string) error {
+	validateSegment := func(segment string) error {
+		matches := html5BlockElementPattern.FindAllStringSubmatchIndex(segment, -1)
+		for _, match := range matches {
+			if len(match) < 4 || match[2] < 0 || match[3] < 0 {
+				continue
+			}
+			if strings.TrimSpace(segment[match[2]:match[3]]) != "" {
+				return common.ValidationErrorf("html5-block content must be loaded from path=\"@relative.html\"; remove content between <html5-block> and </html5-block> and put the HTML in the referenced file").WithParam("html5-block")
+			}
+		}
+		return nil
+	}
+
+	if strings.TrimSpace(format) != "markdown" {
+		return validateSegment(content)
+	}
+
+	var validateErr error
+	_ = applyOutsideCodeFences(content, func(segment string) string {
+		if validateErr != nil {
+			return segment
+		}
+		validateErr = validateSegment(segment)
+		return segment
+	})
+	return validateErr
 }
 
 func materializeHTML5BlockResources(runtime *common.RuntimeContext, format string, docToken string, data map[string]interface{}) error {
@@ -269,7 +302,7 @@ func lookupHTML5BlockResource(resources html5BlockResourceMap, ref string) (html
 	group := resources[html5BlockTag]
 	entry, ok := group[ref]
 	if !ok {
-		return html5BlockResourceEntry{}, common.ValidationErrorf("document.resources.%s.%s is missing; cannot materialize html5-block", html5BlockTag, ref).WithParam("resources")
+		return html5BlockResourceEntry{}, common.ValidationErrorf("document.resources.%s.%s is missing; cannot materialize html5-block. Re-run fetch or check that the upstream document.resources field includes this ref.", html5BlockTag, ref).WithParam("resources")
 	}
 	return entry, nil
 }

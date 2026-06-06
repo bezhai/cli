@@ -177,8 +177,27 @@ func TestDocsCreateV2HTML5BlockPathReadFailure(t *testing.T) {
 		"--content", `<html5-block path="@missing.html"></html5-block>`,
 		"--as", "user",
 	})
-	if err == nil || !strings.Contains(err.Error(), `html5-block path "missing.html" cannot be read`) {
+	if err == nil || !strings.Contains(err.Error(), `html5-block path "missing.html" cannot be read from the current working directory`) {
 		t.Fatalf("expected path read error, got: %v", err)
+	}
+}
+
+func TestDocsCreateV2HTML5BlockRejectsInlineContent(t *testing.T) {
+	dir := t.TempDir()
+	cmdutil.TestChdir(t, dir)
+	if err := os.WriteFile("widget.html", []byte("<section>from file</section>"), 0o600); err != nil {
+		t.Fatalf("WriteFile() error: %v", err)
+	}
+
+	f, stdout, _, _ := cmdutil.TestFactory(t, docsCreateTestConfig(t, ""))
+	err := runDocsCreateShortcut(t, f, stdout, []string{
+		"+create",
+		"--api-version", "v2",
+		"--content", `<html5-block path="@widget.html"><section>inline</section></html5-block>`,
+		"--as", "user",
+	})
+	if err == nil || !strings.Contains(err.Error(), `html5-block content must be loaded from path="@relative.html"`) {
+		t.Fatalf("expected inline content error, got: %v", err)
 	}
 }
 
@@ -203,7 +222,7 @@ func TestDocsFetchV2MissingHTML5BlockResourceFails(t *testing.T) {
 		"--format", "json",
 		"--as", "user",
 	}, f, stdout)
-	if err == nil || !strings.Contains(err.Error(), "document.resources.html5-block.html5_missing is missing") {
+	if err == nil || !strings.Contains(err.Error(), "Re-run fetch or check that the upstream document.resources field includes this ref") {
 		t.Fatalf("expected missing resource error, got: %v", err)
 	}
 }
