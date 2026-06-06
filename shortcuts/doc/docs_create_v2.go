@@ -41,11 +41,17 @@ func validateCreateV2(_ context.Context, runtime *common.RuntimeContext) error {
 			errs.InvalidParam{Name: "--parent-position", Reason: "mutually exclusive with --parent-token"},
 		)
 	}
+	if err := validateHTML5BlockWriteContent(runtime, runtime.Str("doc-format"), runtime.Str("content")); err != nil {
+		return err
+	}
 	return nil
 }
 
 func dryRunCreateV2(_ context.Context, runtime *common.RuntimeContext) *common.DryRunAPI {
-	body := buildCreateBody(runtime)
+	body, err := buildCreateBodyWithHTML5Resources(runtime)
+	if err != nil {
+		body = buildCreateBody(runtime)
+	}
 	desc := "OpenAPI: create document"
 	if runtime.IsBot() {
 		desc += ". After document creation succeeds in bot mode, the CLI will also try to grant the current CLI user full_access (可管理权限) on the new document."
@@ -57,7 +63,10 @@ func dryRunCreateV2(_ context.Context, runtime *common.RuntimeContext) *common.D
 }
 
 func executeCreateV2(_ context.Context, runtime *common.RuntimeContext) error {
-	body := buildCreateBody(runtime)
+	body, err := buildCreateBodyWithHTML5Resources(runtime)
+	if err != nil {
+		return err
+	}
 
 	data, err := doDocAPI(runtime, "POST", "/open-apis/docs_ai/v1/documents", body)
 	if err != nil {

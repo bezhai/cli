@@ -115,13 +115,21 @@ func validateUpdateV2(_ context.Context, runtime *common.RuntimeContext) error {
 			return errs.NewValidationError(errs.SubtypeInvalidArgument, "--command append requires --content").WithParam("--content")
 		}
 	}
+	if content != "" {
+		if err := validateHTML5BlockWriteContent(runtime, runtime.Str("doc-format"), content); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
 func dryRunUpdateV2(_ context.Context, runtime *common.RuntimeContext) *common.DryRunAPI {
 	// Validate has already accepted --doc; parseDocumentRef cannot fail here.
 	ref, _ := parseDocumentRef(runtime.Str("doc"))
-	body, _ := buildUpdateBodyWithReferenceMap(runtime)
+	body, err := buildUpdateBodyWithHTML5Resources(runtime)
+	if err != nil {
+		body = buildUpdateBody(runtime)
+	}
 	apiPath := fmt.Sprintf("/open-apis/docs_ai/v1/documents/%s", ref.Token)
 	return common.NewDryRunAPI().
 		PUT(apiPath).
@@ -134,7 +142,7 @@ func executeUpdateV2(_ context.Context, runtime *common.RuntimeContext) error {
 	ref, _ := parseDocumentRef(runtime.Str("doc"))
 
 	apiPath := fmt.Sprintf("/open-apis/docs_ai/v1/documents/%s", ref.Token)
-	body, err := buildUpdateBodyWithReferenceMap(runtime)
+	body, err := buildUpdateBodyWithHTML5Resources(runtime)
 	if err != nil {
 		return err
 	}

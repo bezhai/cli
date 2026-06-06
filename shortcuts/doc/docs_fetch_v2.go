@@ -71,6 +71,9 @@ func executeFetchV2(_ context.Context, runtime *common.RuntimeContext) error {
 	if err != nil {
 		return err
 	}
+	if err := materializeHTML5BlockResources(runtime, runtime.Str("doc-format"), ref.Token, data); err != nil {
+		return err
+	}
 	if warning := addFetchDetailDowngradeWarning(runtime, data); warning != "" && runtime.Format == "pretty" {
 		fmt.Fprintf(runtime.IO().ErrOut, "warning: %s\n", warning)
 	}
