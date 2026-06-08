@@ -392,7 +392,7 @@ func TestDocsUpdateV2HTML5BlockInputRoundTrip(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(resourceDir, "html5_1.html"), []byte("<html><main>roundtrip</main></html>"), 0o600); err != nil {
 		t.Fatalf("WriteFile() error: %v", err)
 	}
-	fetchJSON := `{"ok":true,"data":{"document":{"content":"<docx><html5-block data-ref=\"html5_1\"></html5-block></docx>","reference_map":{"html5-block":{"html5_1":{"path":"@doc-fetch-resources/doxcn_fetch/html5_1.html"}}}}}}`
+	fetchJSON := `{"ok":true,"data":{"document":{"content":"<title id=\"doxcn_fetch\">demo</title><docx id=\"doxcn_wrapper\"><html5-block id=\"doxcn_html\" data-ref=\"html5_1\"></html5-block></docx>","reference_map":{"html5-block":{"html5_1":{"path":"@doc-fetch-resources/doxcn_fetch/html5_1.html"}}}}}}`
 	if err := os.WriteFile("fetch.json", []byte(fetchJSON), 0o600); err != nil {
 		t.Fatalf("WriteFile(fetch.json) error: %v", err)
 	}
@@ -416,7 +416,7 @@ func TestDocsUpdateV2HTML5BlockInputRoundTrip(t *testing.T) {
 	}
 
 	body := decodeRequestBody(t, stub.CapturedBody)
-	if got := body["content"].(string); got != `<docx><html5-block data-ref="html5_1"></html5-block></docx>` {
+	if got := body["content"].(string); got != `<title>demo</title><docx><html5-block data-ref="html5_1"></html5-block></docx>` {
 		t.Fatalf("content = %q", got)
 	}
 	refMap := decodeHTML5ReferenceMap(t, body["reference_map"])
