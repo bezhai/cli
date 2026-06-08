@@ -112,13 +112,6 @@ func resolveDocsV2WriteInput(runtime *common.RuntimeContext) (docsV2WriteInput, 
 			return docsV2WriteInput{}, err
 		}
 		input = parsed
-		if strings.TrimSpace(runtime.Str("doc-format")) != "markdown" {
-			content, err := stripDocxXMLIDAttrs(input.Content)
-			if err != nil {
-				return docsV2WriteInput{}, err
-			}
-			input.Content = content
-		}
 	} else {
 		input.Content = runtime.Str("content")
 		if raw := runtime.Str("reference-map"); strings.TrimSpace(raw) != "" {
@@ -187,66 +180,6 @@ func parseDocsV2Input(raw string) (docsV2WriteInput, error) {
 		}
 	}
 	return docsV2WriteInput{Content: content, ReferenceMap: refMap}, nil
-}
-
-func stripDocxXMLIDAttrs(content string) (string, error) {
-	if strings.TrimSpace(content) == "" {
-		return content, nil
-	}
-	decoder := xml.NewDecoder(strings.NewReader("<docx-input-root>" + content + "</docx-input-root>"))
-	var out strings.Builder
-	depth := 0
-	for {
-		token, err := decoder.Token()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return "", common.ValidationErrorf("--input document.content must be valid XML so block ids can be removed before write: %v", err).WithParam("--input").WithCause(err)
-		}
-		switch tok := token.(type) {
-		case xml.StartElement:
-			depth++
-			if depth == 1 {
-				continue
-			}
-			writeStartElementWithoutID(&out, tok)
-		case xml.EndElement:
-			if depth > 1 {
-				out.WriteString("</")
-				out.WriteString(tok.Name.Local)
-				out.WriteByte('>')
-			}
-			depth--
-		case xml.CharData:
-			if depth > 0 {
-				out.WriteString(escapeXMLText(string(tok)))
-			}
-		case xml.Comment:
-			if depth > 0 {
-				out.WriteString("<!--")
-				out.WriteString(string(tok))
-				out.WriteString("-->")
-			}
-		}
-	}
-	return out.String(), nil
-}
-
-func writeStartElementWithoutID(out *strings.Builder, start xml.StartElement) {
-	out.WriteByte('<')
-	out.WriteString(start.Name.Local)
-	for _, attr := range start.Attr {
-		if attr.Name.Local == "id" {
-			continue
-		}
-		out.WriteByte(' ')
-		out.WriteString(attr.Name.Local)
-		out.WriteString(`="`)
-		out.WriteString(escapeXMLAttr(attr.Value))
-		out.WriteByte('"')
-	}
-	out.WriteByte('>')
 }
 
 func decodeJSONObject(raw []byte, label string) (map[string]json.RawMessage, error) {
@@ -802,12 +735,6 @@ func escapeXMLAttr(value string) string {
 			b.WriteRune(r)
 		}
 	}
-	return b.String()
-}
-
-func escapeXMLText(value string) string {
-	var b bytes.Buffer
-	_ = xml.EscapeText(&b, []byte(value))
 	return b.String()
 }
 

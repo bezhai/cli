@@ -416,7 +416,7 @@ func TestDocsUpdateV2HTML5BlockInputRoundTrip(t *testing.T) {
 	}
 
 	body := decodeRequestBody(t, stub.CapturedBody)
-	if got := body["content"].(string); got != `<title>demo</title><docx><html5-block data-ref="html5_1"></html5-block></docx>` {
+	if got := body["content"].(string); got != `<title id="doxcn_fetch">demo</title><docx id="doxcn_wrapper"><html5-block id="doxcn_html" data-ref="html5_1"></html5-block></docx>` {
 		t.Fatalf("content = %q", got)
 	}
 	refMap := decodeHTML5ReferenceMap(t, body["reference_map"])
