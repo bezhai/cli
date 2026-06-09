@@ -19,6 +19,19 @@ lark-cli docs +create --content '<title>项目计划</title><h1>目标</h1><p>�
 
 # 仅当用户明确要求导入 Markdown 时才使用；文档标题用 --title，正文标题按内容自然组织
 lark-cli docs +create --doc-format markdown --title "项目计划" --content $'## 目标\n\n- 明确重点\n- 记录待办'
+
+# 创建到指定文件夹（XML）
+lark-cli docs +create --api-version v2 --parent-token fldcnXXXX --content '<title>标题</title><p>首段内容</p>'
+
+# 创建到个人知识库（XML）
+lark-cli docs +create --api-version v2 --parent-position my_library --content '<title>标题</title><p>内容</p>'
+
+# 创建含 HTML5 block 的文档：HTML 放本地文件，XML 只保留结构
+lark-cli docs +create --api-version v2 \
+  --content '<title>Demo</title><html5-block path="@widget.html"></html5-block>'
+
+# 从 docs +fetch 输出回灌创建新文档
+lark-cli docs +create --api-version v2 --input @fetch.json
 ```
 
 ## 返回值
@@ -33,14 +46,15 @@ lark-cli docs +create --doc-format markdown --title "项目计划" --content $'#
       "revision_id": 1,
       "url": "https://xxx.feishu.cn/docx/docx_token",
       "new_blocks": [
-        { "block_id": "blkcnXXXX", "block_type": "whiteboard", "block_token": "boardXXXX" }
+        { "block_id": "blkcnXXXX", "block_type": "whiteboard", "block_token": "boardXXXX" },
+        { "block_id": "blkcnHTML", "block_type": "html5-block", "block_token": "blk_token" }
       ]
     }
   }
 }
 ```
 
-- **`document.new_blocks`**：本次操作新增的 block 列表（如画板）。`block_id` 可用于 `docs +update` 的 `--block-id` 做精确编辑；`block_token` 是资源块（如画板）的 token，可交给 `lark-whiteboard` 等 skill 继续操作
+- **`document.new_blocks`**：本次操作新增的 block 列表（如画板、html5-block）。`block_id` 可用于 `docs +update` 的 `--block-id` 做精确编辑；`block_token` 是资源块 token（如画板 token 或 html5-block block token）。如果后续要删除、替换刚创建的 html5-block，使用这里返回的新 `block_id`，不要复用输入 XML 中的旧 id。
 
 > \[!IMPORTANT]
 > 如果文档是**以应用身份（bot）创建**的，如 `lark-cli docs +create --as bot` 在文档创建成功后，CLI 会**尝试为当前 CLI 用户自动授予该文档的 `full_access`（可管理权限）**。
@@ -58,8 +72,11 @@ lark-cli docs +create --doc-format markdown --title "项目计划" --content $'#
 
 | 参数                  | 必填 | 说明                                          |
 | ------------------- | -- |---------------------------------------------|
-| `--title`           | 否  | 文档标题，Markdown 导入时使用；XML 创建推荐在 `--content` 开头写 `<title>...</title>`；多个标题仅保留第一个并在 `warnings` / `degrade_details` 提示 |
-| `--content`         | 视情况 | 文档内容（XML 或 Markdown 格式）；不传 `--content` 时必须传 `--title` |
+| `--api-version`     | 是  | 固定传 `v2`                                    |
+| `--title`           | 否  | 文档标题；CLI 会把它前置为 `<title>...</title>`，不传 `--content` / `--input` 时可只用 `--title` 创建标题文档 |
+| `--content`         | 视情况 | 文档内容（XML 或 Markdown 格式）；与 `--input` 互斥 |
+| `--input`           | 否  | 隐藏高级入口：读取 fetch JSON envelope / `data` / 裸 `document`，自动抽取 `document.content` 和 `document.reference_map`；与 `--content` / `--reference-map` 互斥 |
+| `--reference-map`   | 否  | 隐藏高级入口：与 `--content` 搭配传结构化 `reference_map`，主要用于 `<html5-block data-ref="...">` |
 | `--doc-format`      | 否  | 内容格式：`xml`（默认，始终优先使用）\| `markdown`（仅用户明确要求时） |
 | `--parent-token`    | 否  | 父文件夹或知识库节点 token（与 `--parent-position` 互斥）  |
 | `--parent-position` | 否  | 父节点位置，如 `my_library`（与 `--parent-token` 互斥） |
@@ -68,6 +85,7 @@ lark-cli docs +create --doc-format markdown --title "项目计划" --content $'#
 
 - **较长文档**：参考 [`lark-doc-create-workflow.md`](style/lark-doc-create-workflow.md) 先建骨架再分段写入；短文档可一次写完整内容
 - **表达形式**：由用户目标和内容决定。需要结构化表达时可参考 [`lark-doc-style.md`](style/lark-doc-style.md)，但不要默认套用固定开头、固定富 block 比例或固定图表
+- **HTML5 block**：写入时使用 `<html5-block path="@relative.html"></html5-block>`，不要把 HTML 内联进标签。fetch 结果可直接 `--input @fetch.json` 回灌；如果 fetch 结果的 `reference_map` 使用 `path`，执行命令前必须保留对应 `doc-fetch-resources/...html` 文件。
 
 ## 参考
 
