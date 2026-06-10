@@ -26,7 +26,6 @@ const (
 	html5BlockDataAttr        = "data"
 	html5BlockReferenceRoot   = "doc-fetch-resources"
 	html5BlockReferenceMaxRaw = 1024
-	html5BlockSuggestionRead  = "must_read_html_code"
 )
 
 var (
@@ -358,7 +357,6 @@ func processHTML5BlockReferenceMapForFetch(runtime *common.RuntimeContext, forma
 	if changed {
 		doc["reference_map"] = refMap
 	}
-	ensureHTML5BlockSuggestion(data)
 	return nil
 }
 
@@ -426,25 +424,6 @@ func validateFetchedHTML5BlockRefs(format string, content string, refMap html5Bl
 		return segment
 	})
 	return validateErr
-}
-
-func ensureHTML5BlockSuggestion(data map[string]interface{}) {
-	var suggestions []interface{}
-	switch existing := data["suggestions"].(type) {
-	case []interface{}:
-		suggestions = existing
-	case []string:
-		suggestions = make([]interface{}, 0, len(existing))
-		for _, item := range existing {
-			suggestions = append(suggestions, item)
-		}
-	}
-	for _, item := range suggestions {
-		if s, _ := item.(string); s == html5BlockSuggestionRead {
-			return
-		}
-	}
-	data["suggestions"] = append(suggestions, html5BlockSuggestionRead)
 }
 
 func resolveReferenceMapPaths(runtime *common.RuntimeContext, refMap html5BlockReferenceMap) error {

@@ -95,7 +95,7 @@ lark-cli docs +fetch --doc Z1Fj...tnAc \
 
 ## HTML5 block / 外部 HTML
 
-fetch 到 `<html5-block data-ref="html5_1"></html5-block>` 时，正文只是占位结构，HTML 内容在 `document.reference_map["html5-block"]["html5_1"]`。如果响应顶层 `data.suggestions` 包含 `must_read_html_code`，必须读取这些 HTML 后再回答或编辑。
+fetch 到 `<html5-block data-ref="html5_1"></html5-block>` 时，正文只是占位结构，HTML 内容在 `document.reference_map["html5-block"]["html5_1"]`。如果响应顶层 `data.tips` 包含 `must_read_html_code`，必须读取这些 HTML 后再回答或编辑。
 
 返回可能直接包含短 HTML：
 
@@ -112,7 +112,7 @@ fetch 到 `<html5-block data-ref="html5_1"></html5-block>` 时，正文只是占
         }
       }
     },
-    "suggestions": ["must_read_html_code"]
+    "tips": "must_read_html_code"
   }
 }
 ```

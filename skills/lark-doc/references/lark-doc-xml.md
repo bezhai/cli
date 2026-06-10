@@ -71,6 +71,14 @@ lark-cli docs +create --api-version v2 \
   --reference-map '{"html5-block":{"html5_1":{"data":"<html></html>"}}}'
 ```
 
+`--reference-map` 也支持从文件读取：
+
+```bash
+lark-cli docs +create --api-version v2 \
+  --content '<html5-block data-ref="html5_1"></html5-block>' \
+  --reference-map @reference-map.json
+```
+
 `reference_map` 只承载 HTML 数据或 CLI 本地 `path`，不要使用旧字段 `resources`。`data` 属性是 SDK 内部保留形态，Agent 不应写入 `<html5-block data="...">`。
 
 # 四、块级复制与移动

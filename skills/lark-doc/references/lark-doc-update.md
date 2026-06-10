@@ -25,7 +25,7 @@
 | `--doc-format` | 否 | 内容格式：`xml`（默认，始终优先使用）\| `markdown`（仅用户明确要求时） |
 | `--content` | 视指令 | 写入内容（`str_replace` 传空字符串可实现删除） |
 | `--input` | 视指令 | 隐藏高级入口：读取 fetch JSON envelope / `data` / 裸 `document`，自动抽取 `document.content` 和 `document.reference_map`；与 `--content` / `--reference-map` 互斥 |
-| `--reference-map` | 否 | 结构化 `reference_map` JSON object；当 `--content` 使用正文外部载荷 / 引用映射时与内容一起传给服务，支持直接 JSON、`@reference-map.json`（相对路径）或 `-` 从 stdin 读取。通常用于回写已有 `document.reference_map`。 |
+| `--reference-map` | 否 | 公开高级入口：与 `--content` 搭配传结构化 `reference_map`，主要用于 `<html5-block data-ref="...">`；支持直接 JSON、`@reference-map.json` 或 `-` 从 stdin 读取 |
 | `--pattern` | 视指令 | 匹配文本（str_replace） |
 | `--block-id` | 视指令 | 目标 block ID（block_* 操作），逗号分隔可批量删除，-1 表示末尾 |
 | `--src-block-ids` | 视指令 | 源 block ID（逗号分隔），用于 block_copy_insert_after / block_move_after |
@@ -153,6 +153,14 @@ lark-cli docs +update --api-version v2 --doc "<doc_id>" --command append \
   --reference-map '{"html5-block":{"html5_1":{"data":"<html></html>"}}}'
 ```
 
+也可以把引用映射放在文件里：
+
+```bash
+lark-cli docs +update --api-version v2 --doc "<doc_id>" --command append \
+  --content '<html5-block data-ref="html5_1"></html5-block>' \
+  --reference-map @reference-map.json
+```
+
 ### block_delete — 删除指定 block
 
 ```bash
@@ -273,7 +281,7 @@ lark-cli docs +update --doc "<doc_id>" --command str_replace \
   - **XML 模式（默认）**：`--pattern` 只支持**行内**匹配，不支持跨行 / 跨 block。段落、整块或容器级（列表、表格、分栏、引用块等）改动请改用 `block_replace` 指定 block_id 重建。
   - **Markdown 模式**（`--doc-format markdown`）：`--pattern` 同时支持**行内和跨行**匹配，还支持 `前缀...后缀` 省略号语法（用 `...` 串联首尾片段匹配一大段内容），可以一次替换多行文本；但仍建议优先按最小片段匹配，跨 block 容器级重写仍优先用 `block_replace`，避免副作用。
 - **保护不可重建的内容**：图片、画板、电子表格等以 token 形式存储，替换时避开这些 block
-- **保护 HTML5 block 内容**：看到 `suggestions` 包含 `must_read_html_code` 或 `<html5-block data-ref="...">` 时，先读取 `document.reference_map` 对应 HTML；若 entry 是 `path`，读取 `doc-fetch-resources/...html`。修改时优先用 `--input @fetch.json` 或 `path="@relative.html"`，确保 HTML 内容随正文一起回灌。
+- **保护 HTML5 block 内容**：看到 `tips` 包含 `must_read_html_code` 或 `<html5-block data-ref="...">` 时，先读取 `document.reference_map` 对应 HTML；若 entry 是 `path`，读取 `doc-fetch-resources/...html`。修改时优先用 `--input @fetch.json` 或 `path="@relative.html"`，确保 HTML 内容随正文一起回灌。
 - **str_replace 的 replacement 支持富文本**：可以用行内标签 `<b>`、`<a>`、`<cite>`、`<latex>` 等替换普通文本为富文本
 - **同一 block 只能被 replace 一次**：多次修改同一 block 请合并为一次 block_replace
 - **block_delete 支持批量**：用逗号分隔多个 block_id 一次删除
