@@ -14,7 +14,7 @@ import (
 	"github.com/larksuite/cli/shortcuts/common"
 )
 
-const docsFetchExtraParam = `{"enable_user_cite_reference_map":true}`
+const docsFetchExtraParam = `{"enable_user_cite_reference_map":true,"return_html5_block_data":true}`
 
 // v2FetchFlags returns the flag definitions for the v2 (OpenAPI) fetch path.
 func v2FetchFlags() []common.Flag {
