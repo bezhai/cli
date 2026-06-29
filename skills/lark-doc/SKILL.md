@@ -47,7 +47,7 @@ lark-cli docs +update --api-version v2 --doc "文档URL或token" --command appen
 - 用户明确说"下载/更新/删除文档封面图" → 用 `lark-cli docs +resource-download/+resource-update/+resource-delete --type cover`
 - `resource-*` 目前仅支持 Docx 封面资源；其他图片、附件或素材请走 `+media-*`
 - 如果目标是画板/whiteboard/画板缩略图 → 只能用 `lark-cli docs +media-download --type whiteboard`（不要用 `+media-preview`）
-- 用户明确要操作思维笔记 → 走 [思维笔记链路](references/lark-doc-mindnote.md)；入口属于 `lark-doc`，实际执行命令使用 `lark-cli mindnotes nodes list/create`
+- 用户明确要操作思维笔记，或给出 `/mindnote/` URL/token → 入口属于 `lark-doc`；如果是**已有思维笔记**，走 [思维笔记链路](references/lark-doc-mindnote.md)，实际执行命令使用 `lark-cli mindnotes nodes list/create`；如果是**新建一个思维笔记**，改走 [lark-doc-whiteboard](references/lark-doc-whiteboard.md)
 - 拿到 spreadsheet URL/token 后 → 切到 `lark-sheets` 做对象内部操作
 - 用户说"给文档加评论""查看评论""回复评论""给评论加/删除表情 reaction" → 切到 `lark-drive` 处理
 - 文档内容中出现嵌入的 `<sheet>`、`<bitable>` 或 `<cite file-type="sheets|bitable">` 标签时 → **必须主动提取 token 并切到对应技能下钻读取内部数据**，不能只呈现标签本身

@@ -4,6 +4,12 @@
 
 当用户要操作思维笔记时，入口属于 `lark-doc`，但实际执行命令使用 `lark-cli mindnotes nodes list/create`，不是 `docs +...`。
 
+> [!IMPORTANT]
+> 当前这条链路只支持**读取已有思维笔记**，以及在**已有思维笔记**里读取节点、创建子节点。
+> 在执行前，先确认用户给出的 URL / token 确实对应**思维笔记（Mindnote）**，不要把普通 Docx / Wiki token 当成 `mindnote_id` 使用。
+> `mindnotes nodes create` 只是在现有思维笔记下新增节点，**不是**新建一个新的思维笔记。
+> 如果用户要**新建思维笔记**，不要走本链路，改走 [lark-doc-whiteboard](lark-doc-whiteboard.md)。
+
 ## 命令
 
 ```bash
@@ -72,10 +78,13 @@ lark-cli mindnotes nodes create \
 
 ## 推荐工作流
 
-1. 先拿到 `mindnote_id`。
-2. 先执行 `mindnotes nodes list`，确认目标 `parent_id`。
-3. 再执行 `mindnotes nodes create`。
-4. 写操作优先带 `client_token`，避免重试时重复创建。
+1. 先判断用户目标是不是“新建一个思维笔记”。
+2. 如果是新建思维笔记，切到 [lark-doc-whiteboard](lark-doc-whiteboard.md)。
+3. 如果是操作已有思维笔记，先确认用户提供的是 **Mindnote URL / token**，不是普通文档或知识库 token。
+4. 再拿到 `mindnote_id`。
+5. 先执行 `mindnotes nodes list`，确认目标 `parent_id`。
+6. 再执行 `mindnotes nodes create`。
+7. 写操作优先带 `client_token`，避免重试时重复创建。
 
 > [!CAUTION]
 > `mindnotes nodes create` 是写操作，执行前确认目标思维笔记和插入位置。
@@ -83,4 +92,5 @@ lark-cli mindnotes nodes create \
 ## 参考
 
 - [lark-doc-fetch](lark-doc-fetch.md) — 获取文档内容
+- [lark-doc-whiteboard](lark-doc-whiteboard.md) — 新建思维笔记走画板链路
 - [lark-shared](../../lark-shared/SKILL.md) — 认证和全局参数
