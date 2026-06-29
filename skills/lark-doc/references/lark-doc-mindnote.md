@@ -6,7 +6,6 @@
 
 > [!IMPORTANT]
 > 当前这条链路只支持**读取已有思维笔记**，以及在**已有思维笔记**里读取节点、创建子节点。
-> 在执行前，先确认用户给出的 URL / token 确实对应**思维笔记（Mindnote）**，不要把普通 Docx / Wiki token 当成 `mindnote_id` 使用。
 > `mindnotes nodes create` 只是在现有思维笔记下新增节点，**不是**新建一个新的思维笔记。
 > 如果用户要**新建思维笔记**，不要走本链路，改走 [lark-doc-whiteboard](lark-doc-whiteboard.md)。
 
@@ -80,8 +79,8 @@ lark-cli mindnotes nodes create \
 
 1. 先判断用户目标是不是“新建一个思维笔记”。
 2. 如果是新建思维笔记，切到 [lark-doc-whiteboard](lark-doc-whiteboard.md)。
-3. 如果是操作已有思维笔记，先确认用户提供的是 **Mindnote URL / token**，不是普通文档或知识库 token。
-4. 再拿到 `mindnote_id`。
+3. 如果是操作已有思维笔记，先通过 token 类别判断。
+4. 确认是 **Mindnote** 后再拿到 `mindnote_id`。
 5. 先执行 `mindnotes nodes list`，确认目标 `parent_id`。
 6. 再执行 `mindnotes nodes create`。
 7. 写操作优先带 `client_token`，避免重试时重复创建。
