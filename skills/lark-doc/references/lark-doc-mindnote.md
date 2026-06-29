@@ -6,7 +6,7 @@
 
 > [!IMPORTANT]
 > 当前这条链路只支持**读取已有思维笔记**，以及在**已有思维笔记**里读取节点、创建子节点。
-> `mindnotes nodes create` 只是在现有思维笔记下新增节点，**不是**新建一个新的思维笔记。
+> `mindnotes nodes create` 是新增/更新节点命令，**不是**新建一个新的思维笔记。
 > 如果用户要**新建思维笔记**，不要走本链路，改走 [lark-doc-whiteboard](lark-doc-whiteboard.md)。
 
 ## 命令
@@ -32,6 +32,23 @@ lark-cli mindnotes nodes create \
         ],
         "highlight":"yellow",
         "finish":false
+      }
+    ]
+  }'
+
+# 更新已有节点
+lark-cli mindnotes nodes create \
+  --mindnote-id "D05hbLa3dm08GbnerjwbvNmUcgf" \
+  --data '{
+    "client_token":"fe599b60-450f-46ff-b2ef-9f6675625b98",
+    "nodes":[
+      {
+        "node_id":"node_existing123",
+        "texts":[
+          {"element_type":"text","text":{"content":"更新后的节点内容"}}
+        ],
+        "highlight":"blue",
+        "finish":true
       }
     ]
   }'
@@ -61,7 +78,8 @@ lark-cli mindnotes nodes create \
 | 字段 | 必填 | 说明 |
 |------|------|------|
 | `client_token` | 否 | 幂等 token，建议写操作传入 |
-| `nodes` | 是 | 待创建节点数组 |
+| `nodes` | 是 | 待创建或更新的节点数组 |
+| `nodes[].node_id` | 否 | 节点 ID；传入已有 `node_id` 时表示更新对应节点 |
 | `nodes[].parent_id` | 否 | 父节点 ID；创建子节点时传入 |
 | `nodes[].texts` | 否 | 节点正文富文本数组 |
 | `nodes[].notes` | 否 | 节点备注富文本数组 |
@@ -82,11 +100,12 @@ lark-cli mindnotes nodes create \
 3. 如果是操作已有思维笔记，先通过 token 类别判断。
 4. 确认是 **Mindnote** 后再拿到 `mindnote_id`。
 5. 先执行 `mindnotes nodes list`，确认目标 `parent_id`。
-6. 再执行 `mindnotes nodes create`。
-7. 写操作优先带 `client_token`，避免重试时重复创建。
+6. 新增子节点时，在 `nodes[]` 里传 `parent_id`；更新已有节点时，在 `nodes[]` 里传已有 `node_id`。
+7. 再执行 `mindnotes nodes create`。
+8. 写操作优先带 `client_token`，避免重试时重复创建或重复更新。
 
 > [!CAUTION]
-> `mindnotes nodes create` 是写操作，执行前确认目标思维笔记和插入位置。
+> `mindnotes nodes create` 是写操作。创建时确认插入位置，更新时确认 `node_id` 指向的就是目标节点。
 
 ## 参考
 
