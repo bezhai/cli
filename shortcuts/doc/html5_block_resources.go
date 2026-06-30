@@ -60,10 +60,10 @@ type html5BlockStartTag struct {
 
 func buildCreateBodyWithHTML5ReferenceMap(runtime *common.RuntimeContext) (map[string]interface{}, error) {
 	body := buildCreateBody(runtime)
-	if runtime.Str("content") == "" && !runtime.Changed("input") && !runtime.Changed("reference-map") {
+	if runtime.Str("content") == "" && !runtime.Changed("reference-map") {
 		return body, nil
 	}
-	input, err := resolveDocsV2WriteInput(runtime)
+	input, err := resolveDocsV2ContentReferenceMap(runtime)
 	if err != nil {
 		return nil, err
 	}
@@ -89,10 +89,7 @@ func buildUpdateBodyWithHTML5ReferenceMap(runtime *common.RuntimeContext) (map[s
 	return body, nil
 }
 
-func validateDocsV2WriteInputFlags(runtime *common.RuntimeContext) error {
-	if runtime.Changed("input") && (runtime.Changed("content") || runtime.Changed("reference-map")) {
-		return errs.NewValidationError(errs.SubtypeInvalidArgument, "--input is mutually exclusive with --content and --reference-map").WithParam("--input")
-	}
+func validateDocsV2ReferenceMapFlags(runtime *common.RuntimeContext) error {
 	if runtime.Changed("reference-map") && runtime.Str("content") == "" {
 		return errs.NewValidationError(errs.SubtypeInvalidArgument, "--reference-map requires --content").WithParam("--reference-map")
 	}
@@ -102,17 +99,6 @@ func validateDocsV2WriteInputFlags(runtime *common.RuntimeContext) error {
 func validateHTML5BlockWriteContent(runtime *common.RuntimeContext, format string, content string) error {
 	_, _, err := prepareHTML5BlockWriteContent(runtime, format, content, nil)
 	return err
-}
-
-func resolveDocsV2WriteInput(runtime *common.RuntimeContext) (docsV2WriteInput, error) {
-	if runtime.Changed("input") {
-		parsed, err := parseDocsV2Input(runtime.Str("input"))
-		if err != nil {
-			return docsV2WriteInput{}, err
-		}
-		return prepareDocsV2WriteInput(runtime, parsed)
-	}
-	return resolveDocsV2ContentReferenceMap(runtime)
 }
 
 func resolveDocsV2ContentReferenceMap(runtime *common.RuntimeContext) (docsV2WriteInput, error) {
@@ -139,63 +125,6 @@ func prepareDocsV2WriteInput(runtime *common.RuntimeContext, input docsV2WriteIn
 		Content:      content,
 		ReferenceMap: compactReferenceMap(refMap),
 	}, nil
-}
-
-func parseDocsV2Input(raw string) (docsV2WriteInput, error) {
-	if strings.TrimSpace(raw) == "" {
-		return docsV2WriteInput{}, common.ValidationErrorf("--input cannot be empty").WithParam("--input")
-	}
-	root, err := decodeJSONObject([]byte(raw), "--input")
-	if err != nil {
-		return docsV2WriteInput{}, err
-	}
-
-	if dataRaw, ok := root["data"]; ok {
-		root, err = decodeJSONObject(dataRaw, "--input.data")
-		if err != nil {
-			return docsV2WriteInput{}, err
-		}
-	}
-
-	docRaw, hasDoc := root["document"]
-	var doc map[string]json.RawMessage
-	if hasDoc {
-		doc, err = decodeJSONObject(docRaw, "--input.document")
-		if err != nil {
-			return docsV2WriteInput{}, err
-		}
-	} else {
-		doc = root
-	}
-
-	contentRaw, ok := doc["content"]
-	if !ok {
-		return docsV2WriteInput{}, common.ValidationErrorf("--input document.content is required").WithParam("--input")
-	}
-	var content string
-	if err := json.Unmarshal(contentRaw, &content); err != nil {
-		return docsV2WriteInput{}, common.ValidationErrorf("--input document.content must be a string: %v", err).WithParam("--input").WithCause(err)
-	}
-
-	var refMap html5BlockReferenceMap
-	if refRaw, ok := doc["reference_map"]; ok && len(bytes.TrimSpace(refRaw)) > 0 && string(bytes.TrimSpace(refRaw)) != "null" {
-		refMap, err = parseHTML5BlockReferenceMapBytes(refRaw, "--input document.reference_map")
-		if err != nil {
-			return docsV2WriteInput{}, err
-		}
-	}
-	return docsV2WriteInput{Content: content, ReferenceMap: refMap}, nil
-}
-
-func decodeJSONObject(raw []byte, label string) (map[string]json.RawMessage, error) {
-	var out map[string]json.RawMessage
-	if err := json.Unmarshal(raw, &out); err != nil {
-		return nil, common.ValidationErrorf("%s must be a JSON object: %v", label, err).WithParam(label).WithCause(err)
-	}
-	if out == nil {
-		return nil, common.ValidationErrorf("%s must be a JSON object").WithParam(label)
-	}
-	return out, nil
 }
 
 func parseHTML5BlockReferenceMap(raw string, label string) (html5BlockReferenceMap, error) {

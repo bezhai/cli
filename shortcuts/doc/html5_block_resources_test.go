@@ -39,11 +39,18 @@ func TestDocsV2ReferenceMapFlagIsPublicFileInput(t *testing.T) {
 	}
 }
 
-func TestDocsUpdateV2InputFlagIsNotAvailable(t *testing.T) {
-	for _, flag := range v2UpdateFlags() {
-		if flag.Name == "input" {
-			t.Fatal("update should not expose input flag")
-		}
+func TestDocsV2InputFlagIsNotAvailable(t *testing.T) {
+	for name, flags := range map[string][]common.Flag{
+		"create": v2CreateFlags(),
+		"update": v2UpdateFlags(),
+	} {
+		t.Run(name, func(t *testing.T) {
+			for _, flag := range flags {
+				if flag.Name == "input" {
+					t.Fatalf("%s should not expose input flag", name)
+				}
+			}
+		})
 	}
 }
 
@@ -465,50 +472,6 @@ func TestPrepareHTML5BlockWriteContentMarkdownRaw(t *testing.T) {
 	refMap := decodeHTML5ReferenceMap(t, body["reference_map"])
 	if got := refMap[html5BlockTag]["html5_1"].Data; got != "<html><body>markdown</body></html>" {
 		t.Fatalf("reference_map html data = %q", got)
-	}
-}
-
-func TestDocsCreateV2HTML5BlockInputRoundTrip(t *testing.T) {
-	dir := t.TempDir()
-	cmdutil.TestChdir(t, dir)
-	resourceDir := filepath.Join(html5BlockReferenceRoot, "doxcn_fetch")
-	if err := os.MkdirAll(resourceDir, 0o700); err != nil {
-		t.Fatalf("MkdirAll() error: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(resourceDir, "html5_1.html"), []byte("<html><main>roundtrip</main></html>"), 0o600); err != nil {
-		t.Fatalf("WriteFile() error: %v", err)
-	}
-	fetchJSON := `{"ok":true,"data":{"document":{"content":"<title id=\"doxcn_fetch\">demo</title><docx id=\"doxcn_wrapper\"><html5-block id=\"doxcn_html\" data-ref=\"html5_1\"></html5-block></docx>","reference_map":{"html5-block":{"html5_1":{"path":"@doc-fetch-resources/doxcn_fetch/html5_1.html"}}}}}}`
-	if err := os.WriteFile("fetch.json", []byte(fetchJSON), 0o600); err != nil {
-		t.Fatalf("WriteFile(fetch.json) error: %v", err)
-	}
-
-	f, stdout, _, reg := cmdutil.TestFactory(t, docsCreateTestConfig(t, ""))
-	stub := registerDocsAIStub(reg, "POST", "/open-apis/docs_ai/v1/documents", map[string]interface{}{
-		"document": map[string]interface{}{
-			"document_id": "doxcn_new_doc",
-			"revision_id": float64(1),
-		},
-	})
-
-	err := runDocsCreateShortcut(t, f, stdout, []string{
-		"+create",
-		"--api-version", "v2",
-		"--input", "@fetch.json",
-		"--as", "user",
-	})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	body := decodeRequestBody(t, stub.CapturedBody)
-	if got := body["content"].(string); got != `<title id="doxcn_fetch">demo</title><docx id="doxcn_wrapper"><html5-block id="doxcn_html" data-ref="html5_1"></html5-block></docx>` {
-		t.Fatalf("content = %q", got)
-	}
-	refMap := decodeHTML5ReferenceMap(t, body["reference_map"])
-	entry := refMap[html5BlockTag]["html5_1"]
-	if entry.Data != "<html><main>roundtrip</main></html>" || entry.Path != "" {
-		t.Fatalf("reference path should be converted to data before API call: %#v", entry)
 	}
 }
 

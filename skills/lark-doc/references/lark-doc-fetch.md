@@ -125,7 +125,7 @@ fetch 到 `<html5-block data-ref="html5_1"></html5-block>` 时，正文只是占
 }
 ```
 
-此时必须读取该相对路径文件；不要把正文改成 `path`，正文应继续保持 `data-ref`。fetch 输出可以直接用于下一次 `docs +create --input @fetch.json` 或 `docs +update --input @fetch.json` 回灌。
+此时必须读取该相对路径文件；不要把正文改成 `path`，正文应继续保持 `data-ref`。下一次写入时使用 `--content` 传 `document.content`，并用 `--reference-map @reference-map.json` 或等价 JSON 传回对应 `document.reference_map`。
 
 ## 参数
 

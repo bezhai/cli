@@ -18,7 +18,6 @@ func v2CreateFlags() []common.Flag {
 	return []common.Flag{
 		{Name: "title", Desc: "document title; when provided, the CLI prepends it to --content as <title>...</title> so the title wins over later content titles"},
 		{Name: "content", Desc: "document body; XML by default or Markdown when --doc-format markdown. " + docsContentSkillHelp + "; use --help for the latest command flags", Input: []string{common.File, common.Stdin}},
-		{Name: "input", Desc: "hidden: fetch JSON envelope/data/document input; extracts document.content and document.reference_map", Hidden: true, Input: []string{common.File, common.Stdin}},
 		{Name: "reference-map", Desc: "reference_map JSON object for external html5-block data; use with --content that contains data-ref, or pass @reference-map.json", Input: []string{common.File, common.Stdin}},
 		{Name: "doc-format", Desc: "content format; xml is default and supports richer DocxXML blocks, markdown imports plain Markdown", Default: "xml", Enum: []string{"xml", "markdown"}},
 		{Name: "parent-token", Desc: "parent folder token or wiki node token; mutually exclusive with --parent-position"},
@@ -34,7 +33,7 @@ func validateCreateV2(_ context.Context, runtime *common.RuntimeContext) error {
 	if runtime.Changed("title") && title == "" {
 		return errs.NewValidationError(errs.SubtypeInvalidArgument, "--title must not be empty").WithParam("--title")
 	}
-	if err := validateDocsV2WriteInputFlags(runtime); err != nil {
+	if err := validateDocsV2ReferenceMapFlags(runtime); err != nil {
 		return err
 	}
 	if runtime.Str("parent-token") != "" && runtime.Str("parent-position") != "" {
@@ -43,14 +42,12 @@ func validateCreateV2(_ context.Context, runtime *common.RuntimeContext) error {
 			errs.InvalidParam{Name: "--parent-position", Reason: "mutually exclusive with --parent-token"},
 		)
 	}
-	hasWriteInput := runtime.Str("content") != "" || runtime.Changed("input")
-	if !hasWriteInput && title == "" {
-		return errs.NewValidationError(errs.SubtypeInvalidArgument, "--content or --input is required unless --title is provided").WithParam("--content")
+	if runtime.Str("content") == "" && title == "" {
+		return errs.NewValidationError(errs.SubtypeInvalidArgument, "--content is required unless --title is provided").WithParam("--content")
 	}
-	if hasWriteInput {
-		if _, err := resolveDocsV2WriteInput(runtime); err != nil {
-			return err
-		}
+	if runtime.Str("content") != "" {
+		_, err := resolveDocsV2ContentReferenceMap(runtime)
+		return err
 	}
 	return nil
 }
