@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"sync"
 
+	"github.com/larksuite/cli/errs"
 	extcred "github.com/larksuite/cli/extension/credential"
 	"github.com/larksuite/cli/internal/auth"
 	"github.com/larksuite/cli/internal/core"
@@ -39,12 +40,17 @@ type credentialSource interface {
 }
 
 type extensionTokenSource struct {
-	provider extcred.Provider
+	provider   extcred.Provider
+	account    *Account
+	httpClient func() (*http.Client, error)
+
+	tatMu     sync.Mutex
+	tatResult *TokenResult
 }
 
-func (s extensionTokenSource) Name() string { return s.provider.Name() }
+func (s *extensionTokenSource) Name() string { return s.provider.Name() }
 
-func (s extensionTokenSource) CredentialSource() string {
+func (s *extensionTokenSource) CredentialSource() string {
 	switch s.Name() {
 	case "env", "sidecar":
 		return s.Name()
@@ -53,7 +59,7 @@ func (s extensionTokenSource) CredentialSource() string {
 	}
 }
 
-func (s extensionTokenSource) TryResolveToken(ctx context.Context, req TokenSpec) (*TokenResult, bool, error) {
+func (s *extensionTokenSource) TryResolveToken(ctx context.Context, req TokenSpec) (*TokenResult, bool, error) {
 	tok, err := s.provider.ResolveToken(ctx, extcred.TokenSpec{
 		Type:  extcred.TokenType(req.Type.String()),
 		AppID: req.AppID,
@@ -62,7 +68,7 @@ func (s extensionTokenSource) TryResolveToken(ctx context.Context, req TokenSpec
 		return nil, false, err
 	}
 	if tok == nil {
-		return nil, false, nil
+		return s.resolveTATFromAppSecret(ctx, req)
 	}
 	if tok.Value == "" {
 		return nil, false, &MalformedTokenResultError{Source: s.Name(), Type: req.Type, Reason: "empty token"}
@@ -70,7 +76,42 @@ func (s extensionTokenSource) TryResolveToken(ctx context.Context, req TokenSpec
 	return &TokenResult{Token: tok.Value, Scopes: tok.Scopes, Source: core.CredentialSource(s.CredentialSource())}, true, nil
 }
 
-func (s extensionTokenSource) ResolveIdentityHint(ctx context.Context, acct *Account) (*IdentityHint, error) {
+func (s *extensionTokenSource) resolveTATFromAppSecret(ctx context.Context, req TokenSpec) (*TokenResult, bool, error) {
+	if req.Type != TokenTypeTAT || s.account == nil || req.AppID != s.account.AppID || !HasRealAppSecret(s.account.AppSecret) || s.httpClient == nil {
+		return nil, false, nil
+	}
+	s.tatMu.Lock()
+	defer s.tatMu.Unlock()
+	if s.tatResult != nil {
+		return s.tatResult, true, nil
+	}
+	hc, err := s.httpClient()
+	if err != nil {
+		return nil, false, wrapTATMintError(err)
+	}
+	requestCtx := core.WithCredentialSource(ctx, core.CredentialSource(s.CredentialSource()))
+	token, err := FetchTAT(requestCtx, hc, s.account.Brand, s.account.AppID, s.account.AppSecret)
+	if err != nil {
+		return nil, false, wrapTATMintError(err)
+	}
+	if token == "" {
+		return nil, false, &MalformedTokenResultError{Source: s.Name(), Type: req.Type, Reason: "empty token"}
+	}
+	s.tatResult = &TokenResult{Token: token, Source: core.CredentialSource(s.CredentialSource())}
+	return s.tatResult, true, nil
+}
+
+func wrapTATMintError(err error) error {
+	if err == nil {
+		return nil
+	}
+	if _, ok := errs.ProblemOf(err); ok {
+		return err
+	}
+	return errs.NewNetworkError(errs.SubtypeNetworkTransport, "tenant access token request failed: %v", err).WithCause(err)
+}
+
+func (s *extensionTokenSource) ResolveIdentityHint(ctx context.Context, acct *Account) (*IdentityHint, error) {
 	hint := &IdentityHint{}
 	if acct == nil {
 		return hint, nil
@@ -87,6 +128,8 @@ func (s extensionTokenSource) ResolveIdentityHint(ctx context.Context, acct *Acc
 	case ids.UserOnly():
 		hint.AutoAs = core.AsUser
 	case ids.BotOnly():
+		hint.AutoAs = core.AsBot
+	case HasRealAppSecret(acct.AppSecret):
 		hint.AutoAs = core.AsBot
 	}
 	return hint, nil
@@ -193,7 +236,7 @@ func (p *CredentialProvider) doResolveAccount(ctx context.Context) (*Account, er
 		}
 		if acct != nil {
 			internal := convertAccount(acct)
-			source := extensionTokenSource{provider: prov}
+			source := &extensionTokenSource{provider: prov, account: internal, httpClient: p.httpClient}
 			if err := p.enrichUserInfo(ctx, internal, source); err != nil {
 				if p.warnOut != nil {
 					_, _ = fmt.Fprintf(p.warnOut, "warning: unable to verify user identity from credential source %q: %v\n", source.Name(), err)
@@ -325,7 +368,7 @@ func (p *CredentialProvider) ResolveToken(ctx context.Context, req TokenSpec) (*
 	}
 
 	for _, prov := range p.providers {
-		source := extensionTokenSource{provider: prov}
+		source := &extensionTokenSource{provider: prov}
 		result, found, err := source.TryResolveToken(ctx, req)
 		if err != nil {
 			return nil, err
