@@ -63,6 +63,9 @@ func validateUpdateV2(_ context.Context, runtime *common.RuntimeContext) error {
 		return err
 	}
 	content := runtime.Str("content")
+	if err := validateUpdateReferenceMap(runtime, cmd, content); err != nil {
+		return err
+	}
 	hasWriteInput := content != "" || runtime.Changed("input")
 	pattern := runtime.Str("pattern")
 	blockID := runtime.Str("block-id")

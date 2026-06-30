@@ -45,11 +45,7 @@ func validateCreateV2(_ context.Context, runtime *common.RuntimeContext) error {
 	}
 	hasWriteInput := runtime.Str("content") != "" || runtime.Changed("input")
 	if !hasWriteInput && title == "" {
-		return errs.NewValidationError(errs.SubtypeInvalidArgument, "--content or --input is required unless --title is provided").WithParams(
-			errs.InvalidParam{Name: "--content", Reason: "required when --input and --title are absent"},
-			errs.InvalidParam{Name: "--input", Reason: "required when --content and --title are absent"},
-			errs.InvalidParam{Name: "--title", Reason: "optional title-only create content"},
-		)
+		return errs.NewValidationError(errs.SubtypeInvalidArgument, "--content or --input is required unless --title is provided").WithParam("--content")
 	}
 	if hasWriteInput {
 		if _, err := resolveDocsV2WriteInput(runtime); err != nil {

@@ -13,6 +13,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/larksuite/cli/errs"
 	"github.com/larksuite/cli/internal/cmdutil"
 	"github.com/larksuite/cli/internal/validate"
 	"github.com/larksuite/cli/internal/vfs"
@@ -90,10 +91,10 @@ func buildUpdateBodyWithHTML5ReferenceMap(runtime *common.RuntimeContext) (map[s
 
 func validateDocsV2WriteInputFlags(runtime *common.RuntimeContext) error {
 	if runtime.Changed("input") && (runtime.Changed("content") || runtime.Changed("reference-map")) {
-		return common.FlagErrorf("--input is mutually exclusive with --content and --reference-map")
+		return errs.NewValidationError(errs.SubtypeInvalidArgument, "--input is mutually exclusive with --content and --reference-map").WithParam("--input")
 	}
 	if runtime.Changed("reference-map") && runtime.Str("content") == "" {
-		return common.FlagErrorf("--reference-map requires --content")
+		return errs.NewValidationError(errs.SubtypeInvalidArgument, "--reference-map requires --content").WithParam("--reference-map")
 	}
 	return nil
 }
