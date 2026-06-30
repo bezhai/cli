@@ -350,17 +350,14 @@ func jsonSchemaResponseFormat() map[string]any {
 									"minItems": 1,
 									"maxItems": 20,
 									"items": map[string]any{
-										"type":      "string",
-										"maxLength": 100,
+										"type": "string",
 									},
 								},
 								"message": map[string]any{
-									"type":      "string",
-									"maxLength": 500,
+									"type": "string",
 								},
 								"suggested_action": map[string]any{
-									"type":      "string",
-									"maxLength": 500,
+									"type": "string",
 								},
 							},
 						},
