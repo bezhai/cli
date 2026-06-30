@@ -60,7 +60,8 @@ metadata:
 3. 返回体中的 `meeting.id` **必须立刻记录**——后续 `+meeting-events` / `+meeting-leave` 都靠它，**不能用 9 位会议号替代**。
 4. 入会对所有参会人可见，执行前核实 9 位会议号来源，避免误入错会。
 5. 使用应用身份 `--as bot` 执行真实入会；不要用当前登录用户身份尝试让应用机器人入会。
-6. 若入会失败，优先查看 `+meeting-join` reference 的错误排查段落，重点确认会议号、密码、会议状态、等候室 / 审批以及会议是否禁止当前身份加入。
+6. 入会成功后，若用户目标包含“会中助手 / 实时关注 / 推送会中聊天或互动 / 总结正在发生的内容”，Agent 编排层应立即启动 `vc.bot.meeting_activity_v1` 实时监听，并同时监听 `vc.bot.meeting_ended_v1` 作为停止信号。监听必须是显式可见的 `event consume` 进程，不要让 `+meeting-join` 隐式启动后台进程；监听失败或中断时，用 `+meeting-events` 按 `meeting.id` 补拉。
+7. 若入会失败，优先查看 `+meeting-join` reference 的错误排查段落，重点确认会议号、密码、会议状态、等候室 / 审批以及会议是否禁止当前身份加入。
 
 ### 2. 感知会中事件（读操作）
 
@@ -72,12 +73,14 @@ metadata:
    - 再根据 `note_id`、`minute_token` 和用户意图，按 [`lark-vc`](../lark-vc/SKILL.md) 的产物决策读取正文、逐字稿或妙记。
    - 想看参会人快照：用 `vc meeting get --with-participants`（见 [`lark-vc`](../lark-vc/SKILL.md)）
 5. **默认必须使用** **`--page-all`**，除非用户明确要求“只查一页”，或确实需要控制返回体大小。
-6. 输出格式默认优先 `--format pretty`（时间线更易读）；只有在需要完整保留原始消息流与结构化字段时，才使用 `--format json`。
-7. **必须识别分页信号**：只要响应里出现 `has_more=true`、pretty 里的 `more available`，或返回了非空 `page_token`，就不能把当前结果当作完整事件流；默认应继续分页，或明确告诉用户当前只是部分结果。
-8. 保留响应里的 `page_token`，下次增量拉取直接续，不要从头再拉。
-9. **只要你是基于** **`+meeting-events`** **来回答一场正在进行中的会议内容，就不能直接复用旧结果。** 无论用户是在问“现在/刚刚/最新”的状态，还是让你“总结一下这个会议讲什么”，都必须先重新拉一次当前事件流，确认拿到的是最新信息，再基于最新结果回答。只有在用户明确要求基于某次历史快照继续分析时，才可以复用旧结果。
-10. 用户直接问“这个会议讲了什么 / 现在讲到哪了”且上下文没有明确 `meeting_id` 时，先用用户身份发现当前会议；如果用户明确要求应用机器人视角，或上下文已经是应用机器人参会流程，再用应用身份发现。若返回多个会议，展示候选并让用户选择。
-11. 用户直接提供 **9 位会议号** 并询问会中事件/会议内容时，默认把它当作 active meeting 的筛选条件：先按当前身份查 active meetings，并在返回里匹配 `meeting_no == <9位会议号>`；匹配到唯一会议后取长数字 `meeting_id`，再用同一身份查事件。只有用户明确要求“入会 / 让应用机器人旁听 / 代我参会”时才改用 `+meeting-join`。
+6. 命令默认输出结构化事件契约：`meeting`、`identity`、`current_roster`、`events`、`im_post`、`warnings`、`has_more`、`page_token`，参会人含 `participant_type`、`role`、`is_self` 和可读 `label`；事件中的原始细节保留在 `payload/raw`。
+7. 输出格式默认优先 `--format pretty`（时间线更易读，并带当前身份与当前名单标签）；需要结构化处理时用 `--format json`；需要流式消费事件时用 `--format ndjson`。
+8. **必须识别分页信号**：只要响应里出现 `has_more=true`、pretty 里的 `more available`，或返回了非空 `page_token`，就不能把当前结果当作完整事件流；默认应继续分页，或明确告诉用户当前只是部分结果。
+9. 保留响应里的 `page_token`，下次增量拉取直接续，不要从头再拉。
+10. **只要你是基于** **`+meeting-events`** **来回答一场正在进行中的会议内容，就不能直接复用旧结果。** 无论用户是在问“现在/刚刚/最新”的状态，还是让你“总结一下这个会议讲什么”，都必须先重新拉一次当前事件流，确认拿到的是最新信息，再基于最新结果回答。只有在用户明确要求基于某次历史快照继续分析时，才可以复用旧结果。
+11. **会中聊天 / 互动转发到 IM 时必须使用 VC 输出的 `im_post`。** 只要用户要求把“会中聊天 / 发言 / 互动 / 刚才聊了什么”整理后发给 TA 或推送到 IM，就用 `+meeting-events --format json`，并在确认 `data.im_post`（兼容裸输出时的 `im_post`）非空且含内容行后，原样作为 `im +messages-send --msg-type post --content '<im_post>'` 的内容；如果 `im_post` 为空，只说明没有可转发的会中内容，不要调用 IM 发送。`im_post` 由 VC 域负责包装：普通聊天已经是 `tag:"text"`，`message_type=3` reaction 已经是 `tag:"emotion"` + `emoji_type`。不得基于 pretty / Markdown / 文本列表重新生成发送内容；不得自行把 reaction 渲染成 `[表情] OK`、`OK（确认）` 或普通文本。若用户原始请求已经明确“发给我 / 推送给我 / 发到我的聊天框 / 发到我的单聊”，这已经覆盖本次收件人、内容和发送动作，直接把非空 `im_post` 发给当前用户，不再二次询问“是否发送”。此 VC 转发链路默认使用应用身份 `--as bot` 发送；只有用户明确要求“用本人身份 / 用户身份发送”时才切到 `--as user`。如果用户要求发给某个群或其他人但收件人不可唯一确定，只询问缺失的收件人信息；确认后仍发送该 `im_post`，不能改发确认前展示给用户的文字摘要。
+12. 用户直接问“这个会议讲了什么 / 现在讲到哪了”且上下文没有明确 `meeting_id` 时，先用用户身份发现当前会议；如果用户明确要求应用机器人视角，或上下文已经是应用机器人参会流程，再用应用身份发现。若返回多个会议，展示候选并让用户选择。
+13. 用户直接提供 **9 位会议号** 并询问会中事件/会议内容时，默认把它当作 active meeting 的筛选条件：先按当前身份查 active meetings，并在返回里匹配 `meeting_no == <9位会议号>`；匹配到唯一会议后取长数字 `meeting_id`，再用同一身份查事件。只有用户明确要求“入会 / 让应用机器人旁听 / 代我参会”时才改用 `+meeting-join`。
 
 ### 3. 离开会议（写操作）
 
@@ -98,18 +101,28 @@ metadata:
 ### 5. Agent 参会示范
 
 ```bash
-# 1. 入会，捕获 meeting.id
+# 1. 入会，捕获 meeting.id 和 meeting.meeting_no
 JOIN=$(lark-cli vc +meeting-join --as bot --meeting-number 123456789 --format json)
 MID=$(echo "$JOIN" | jq -r '.data.meeting.id')
+MNO=$(echo "$JOIN" | jq -r '.data.meeting.meeting_no // empty')
 
-# 2. 会中轮询事件
-#    默认用 --page-all 拉全当前可见事件；下次增量优先复用 page_token
-#    典型间隔 10-30 秒
+# 2. 入会后优先启动显式实时监听；按 meeting_no 过滤本场会议
+lark-cli event consume vc.bot.meeting_activity_v1 --as bot \
+  --jq "select(.meeting_no == \"$MNO\")" &
+ACTIVITY_PID=$!
+
+lark-cli event consume vc.bot.meeting_ended_v1 --as bot \
+  --jq "select(.meeting_no == \"$MNO\")" &
+ENDED_PID=$!
+
+# 3. 监听失败、中断或需要校准完整结构时，用 meeting.id 补拉当前可见事件
 lark-cli vc +meeting-events --as bot --meeting-id "$MID" --page-all --format pretty
 
-# 3. 会后可选：进入 lark-vc 获取会议产物信息，再按 note_id / minute_token 决策读取
+# 4. 会后可选：进入 lark-vc 获取会议产物信息，再按 note_id / minute_token 决策读取
 lark-cli vc +detail --meeting-ids "$MID"
 ```
+
+实时监听进程必须可见、可停止，并在收到 `vc.bot.meeting_ended_v1`、用户要求停止、或任务结束时清理。示例里的后台 PID 只是说明生命周期管理责任；实际执行时可用前台进程、任务管理器、tmux 或宿主 agent 的进程管理能力。不要让监听进程在用户不可见的情况下长期遗留。
 
 如果用户随后明确要求退出 / 离开 / 结束参会，再单独调用 `lark-cli vc +meeting-leave --as bot --meeting-id "$MID"`。
 
@@ -117,7 +130,7 @@ lark-cli vc +detail --meeting-ids "$MID"
 
 ```bash
 lark-cli vc +meeting-list-active --as bot --user-id <user_open_id> --format json
-lark-cli vc +meeting-events --as bot --meeting-id <meeting_id> --page-all --format pretty
+lark-cli vc +meeting-events --as bot --meeting-id <id> --page-all --format pretty
 ```
 
 如果只是回答当前登录用户所在会议发生了什么，使用用户身份一路查：
