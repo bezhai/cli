@@ -76,7 +76,7 @@ func buildCreateBodyWithHTML5ReferenceMap(runtime *common.RuntimeContext) (map[s
 
 func buildUpdateBodyWithHTML5ReferenceMap(runtime *common.RuntimeContext) (map[string]interface{}, error) {
 	body := buildUpdateBody(runtime)
-	input, err := resolveDocsV2WriteInput(runtime)
+	input, err := resolveDocsV2ContentReferenceMap(runtime)
 	if err != nil {
 		return nil, err
 	}
@@ -105,24 +105,29 @@ func validateHTML5BlockWriteContent(runtime *common.RuntimeContext, format strin
 }
 
 func resolveDocsV2WriteInput(runtime *common.RuntimeContext) (docsV2WriteInput, error) {
-	var input docsV2WriteInput
 	if runtime.Changed("input") {
 		parsed, err := parseDocsV2Input(runtime.Str("input"))
 		if err != nil {
 			return docsV2WriteInput{}, err
 		}
-		input = parsed
-	} else {
-		input.Content = runtime.Str("content")
-		if raw := runtime.Str("reference-map"); strings.TrimSpace(raw) != "" {
-			refMap, err := parseHTML5BlockReferenceMap(raw, "--reference-map")
-			if err != nil {
-				return docsV2WriteInput{}, err
-			}
-			input.ReferenceMap = refMap
-		}
+		return prepareDocsV2WriteInput(runtime, parsed)
 	}
+	return resolveDocsV2ContentReferenceMap(runtime)
+}
 
+func resolveDocsV2ContentReferenceMap(runtime *common.RuntimeContext) (docsV2WriteInput, error) {
+	input := docsV2WriteInput{Content: runtime.Str("content")}
+	if raw := runtime.Str("reference-map"); strings.TrimSpace(raw) != "" {
+		refMap, err := parseHTML5BlockReferenceMap(raw, "--reference-map")
+		if err != nil {
+			return docsV2WriteInput{}, err
+		}
+		input.ReferenceMap = refMap
+	}
+	return prepareDocsV2WriteInput(runtime, input)
+}
+
+func prepareDocsV2WriteInput(runtime *common.RuntimeContext, input docsV2WriteInput) (docsV2WriteInput, error) {
 	content, refMap, err := prepareHTML5BlockWriteContent(runtime, runtime.Str("doc-format"), input.Content, input.ReferenceMap)
 	if err != nil {
 		return docsV2WriteInput{}, err

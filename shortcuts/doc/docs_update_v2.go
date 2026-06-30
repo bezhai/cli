@@ -32,7 +32,6 @@ func v2UpdateFlags() []common.Flag {
 		{Name: "command", Desc: "operation; requirements: str_replace(--pattern), block_delete(--block-id, comma-separated for batch), block_insert_after/block_replace(--block-id,--content), block_copy_insert_after/block_move_after(--block-id,--src-block-ids), overwrite/append(--content)", Enum: validCommandsV2Keys()},
 		{Name: "doc-format", Desc: "content format for --content; xml is default for precise rich edits, markdown for user-provided Markdown or plain append/overwrite", Default: "xml", Enum: []string{"xml", "markdown"}},
 		{Name: "content", Desc: "replacement or inserted content; XML by default or Markdown when --doc-format markdown; empty with str_replace deletes match. " + docsContentSkillHelp + "; use --help for the latest command flags", Input: []string{common.File, common.Stdin}},
-		{Name: "input", Desc: "hidden: fetch JSON envelope/data/document input; extracts document.content and document.reference_map", Hidden: true, Input: []string{common.File, common.Stdin}},
 		{Name: "reference-map", Desc: docsUpdateReferenceMapFlagDesc, Input: []string{common.File, common.Stdin}},
 		{Name: "pattern", Desc: "str_replace match pattern; XML mode is inline text, Markdown mode can match multiline text"},
 		{Name: "block-id", Desc: "target block ID(s) for block operations (comma-separated for batch delete); -1 means document end where supported"},
@@ -59,14 +58,10 @@ func validateUpdateV2(_ context.Context, runtime *common.RuntimeContext) error {
 	if !validCommandsV2[cmd] {
 		return errs.NewValidationError(errs.SubtypeInvalidArgument, "invalid --command %q, valid: str_replace | block_delete | block_insert_after | block_copy_insert_after | block_replace | block_move_after | overwrite | append", cmd).WithParam("--command")
 	}
-	if err := validateDocsV2WriteInputFlags(runtime); err != nil {
-		return err
-	}
 	content := runtime.Str("content")
 	if err := validateUpdateReferenceMap(runtime, cmd, content); err != nil {
 		return err
 	}
-	hasWriteInput := content != "" || runtime.Changed("input")
 	pattern := runtime.Str("pattern")
 	blockID := runtime.Str("block-id")
 	srcBlockIDs := runtime.Str("src-block-ids")
@@ -80,15 +75,12 @@ func validateUpdateV2(_ context.Context, runtime *common.RuntimeContext) error {
 		if blockID == "" {
 			return errs.NewValidationError(errs.SubtypeInvalidArgument, "--command block_delete requires --block-id").WithParam("--block-id")
 		}
-		if hasWriteInput {
-			return docsV2WriteInputRejectedError(runtime, "--command block_delete does not accept --content or --input")
-		}
 	case "block_insert_after":
 		if blockID == "" {
 			return errs.NewValidationError(errs.SubtypeInvalidArgument, "--command block_insert_after requires --block-id").WithParam("--block-id")
 		}
-		if !hasWriteInput {
-			return docsV2WriteInputRequiredError("block_insert_after")
+		if content == "" {
+			return errs.NewValidationError(errs.SubtypeInvalidArgument, "--command block_insert_after requires --content").WithParam("--content")
 		}
 	case "block_copy_insert_after":
 		if blockID == "" {
@@ -97,9 +89,6 @@ func validateUpdateV2(_ context.Context, runtime *common.RuntimeContext) error {
 		if srcBlockIDs == "" {
 			return errs.NewValidationError(errs.SubtypeInvalidArgument, "--command block_copy_insert_after requires --src-block-ids").WithParam("--src-block-ids")
 		}
-		if hasWriteInput {
-			return docsV2WriteInputRejectedError(runtime, "--command block_copy_insert_after does not accept --content or --input")
-		}
 	case "block_move_after":
 		if blockID == "" {
 			return errs.NewValidationError(errs.SubtypeInvalidArgument, "--command block_move_after requires --block-id").WithParam("--block-id")
@@ -107,43 +96,26 @@ func validateUpdateV2(_ context.Context, runtime *common.RuntimeContext) error {
 		if srcBlockIDs == "" {
 			return errs.NewValidationError(errs.SubtypeInvalidArgument, "--command block_move_after requires --src-block-ids").WithParam("--src-block-ids")
 		}
-		if hasWriteInput {
-			return docsV2WriteInputRejectedError(runtime, "--command block_move_after does not accept --content or --input; use --src-block-ids")
+		if content != "" {
+			return errs.NewValidationError(errs.SubtypeInvalidArgument, "--command block_move_after does not accept --content; use --src-block-ids").WithParam("--content")
 		}
 	case "block_replace":
 		if blockID == "" {
 			return errs.NewValidationError(errs.SubtypeInvalidArgument, "--command block_replace requires --block-id").WithParam("--block-id")
 		}
-		if !hasWriteInput {
-			return docsV2WriteInputRequiredError("block_replace")
+		if content == "" {
+			return errs.NewValidationError(errs.SubtypeInvalidArgument, "--command block_replace requires --content").WithParam("--content")
 		}
 	case "overwrite":
-		if !hasWriteInput {
-			return docsV2WriteInputRequiredError("overwrite")
+		if content == "" {
+			return errs.NewValidationError(errs.SubtypeInvalidArgument, "--command overwrite requires --content").WithParam("--content")
 		}
 	case "append":
-		if !hasWriteInput {
-			return docsV2WriteInputRequiredError("append")
-		}
-	}
-	if hasWriteInput {
-		if _, err := resolveDocsV2WriteInput(runtime); err != nil {
-			return err
+		if content == "" {
+			return errs.NewValidationError(errs.SubtypeInvalidArgument, "--command append requires --content").WithParam("--content")
 		}
 	}
 	return nil
-}
-
-func docsV2WriteInputRequiredError(command string) error {
-	return errs.NewValidationError(errs.SubtypeInvalidArgument, "--command %s requires --content or --input", command).WithParam("--content")
-}
-
-func docsV2WriteInputRejectedError(runtime *common.RuntimeContext, message string) error {
-	param := "--content"
-	if runtime.Changed("input") && runtime.Str("content") == "" {
-		param = "--input"
-	}
-	return errs.NewValidationError(errs.SubtypeInvalidArgument, message).WithParam(param)
 }
 
 func dryRunUpdateV2(_ context.Context, runtime *common.RuntimeContext) *common.DryRunAPI {
