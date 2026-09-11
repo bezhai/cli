@@ -394,3 +394,67 @@ describe("isCurlVersionSupported", () => {
     assert.equal(isCurlVersionSupported("libcurl 8.0.0"), false);
   });
 });
+
+// Run the real wizard with mocked process/UI boundaries; no global installs or
+// network requests are allowed in these tests.
+describe("install wizard skills opt-in", () => {
+  const vm = require("node:vm");
+  const source = fs.readFileSync(path.join(__dirname, "install-wizard.js"), "utf8")
+    .replace('p = await import("@clack/prompts");', "p = testPrompts;");
+
+  for (const interactive of [false, true]) {
+    for (const withSkills of [false, true]) {
+      it(`interactive=${interactive}, withSkills=${withSkills}`, async () => {
+        const calls = [];
+        const childProcess = {
+          execFileSync(cmd, args) {
+            calls.push([cmd, ...args]);
+            if (cmd === "npm" && args[0] === "list") throw new Error("not installed");
+            if (cmd === "npm" && args[0] === "view") return Buffer.from("1.0.0");
+            if (cmd === "npm" && args[0] === "prefix") return Buffer.from("/fixture");
+            if (cmd === "/fixture/bin/lark-cli" && args[0] === "config") return Buffer.from("{}");
+            throw new Error(`unexpected command: ${cmd} ${args.join(" ")}`);
+          },
+          execFile(cmd, args, opts, callback) {
+            calls.push([cmd, ...args]);
+            if (cmd === "npm" && args[0] === "install") return callback(null, "");
+            if (cmd === "npx" && args[1] === "skills") return callback(null, "");
+            throw new Error(`unexpected command: ${cmd} ${args.join(" ")}`);
+          },
+        };
+        const noop = () => {};
+        await vm.runInNewContext(source, {
+          require(name) {
+            if (name === "child_process") return childProcess;
+            if (name === "fs") return { existsSync: () => true };
+            if (name === "path") return path;
+            throw new Error(`unexpected require: ${name}`);
+          },
+          process: {
+            platform: "linux",
+            argv: ["node", "run.js", "install", ...(withSkills ? ["--with-skills"] : [])],
+            stdin: { isTTY: interactive },
+            exit(code) { throw new Error(`unexpected exit: ${code}`); },
+          },
+          console: { log: noop, error(message) { throw new Error(message); } },
+          testPrompts: {
+            select: async () => "en", confirm: async () => false, isCancel: () => false,
+            intro: noop, outro: noop, cancel(message) { throw new Error(message); },
+            spinner: () => ({ start: noop, stop: noop }),
+            log: { info: noop, success: noop, step: noop, warn: noop, error: noop },
+          },
+        });
+        assert.ok(calls.some(([cmd, action]) => cmd === "npm" && action === "install"));
+        const skillsCalls = calls.filter(([cmd]) => cmd === "npx");
+        if (withSkills) {
+          assert.deepEqual(skillsCalls.map(call => Array.from(call)), [
+            ["npx", "-y", "skills", "ls", "-g"],
+            ["npx", "-y", "skills", "add", "https://open.feishu.cn/lark-cli/skills/regular", "-y", "-g"],
+          ]);
+        } else {
+          assert.deepEqual(skillsCalls, []);
+        }
+      });
+    }
+  }
+});

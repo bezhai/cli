@@ -93,6 +93,7 @@ type UpdateOptions struct {
 	Force        bool
 	Check        bool
 	SkillsLayout string
+	WithSkills   bool
 }
 
 // NewCmdUpdate creates the update command.
@@ -111,6 +112,8 @@ Detects the installation method automatically:
 
 Use --json for structured output (for AI agents and scripts).
 Use --check to only check for updates without installing.
+Skills are left untouched unless --with-skills is supplied.
+Use --with-skills to install or sync official skills globally.
 
 The skill name "lark-suite" is reserved for CLI-managed suite layout.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -121,6 +124,7 @@ The skill name "lark-suite" is reserved for CLI-managed suite layout.`,
 	cmd.Flags().BoolVar(&opts.JSON, "json", false, "structured JSON output")
 	cmd.Flags().BoolVar(&opts.Force, "force", false, "force reinstall even if already up to date")
 	cmd.Flags().BoolVar(&opts.Check, "check", false, "only check for updates, do not install")
+	cmd.Flags().BoolVar(&opts.WithSkills, "with-skills", false, "also install or sync official skills globally")
 	cmd.Flags().StringVar(&opts.SkillsLayout, "skills-layout", "", "skills layout: separate or suite")
 	cmdutil.SetRisk(cmd, "high-risk-write")
 
@@ -139,12 +143,21 @@ func updateRun(opts *UpdateOptions) error {
 				WithParam("--skills-layout").
 				WithHint("Remove --skills-layout when using --check."))
 	}
+	if opts.Check && opts.WithSkills {
+		return reportError(opts, io, "validation",
+			errs.NewValidationError(errs.SubtypeInvalidArgument, "--with-skills cannot be used with --check").WithParam("--with-skills"))
+	}
+	if !opts.WithSkills && strings.TrimSpace(opts.SkillsLayout) != "" {
+		return reportError(opts, io, "validation",
+			errs.NewValidationError(errs.SubtypeInvalidArgument, "--skills-layout requires --with-skills").WithParam("--skills-layout"))
+	}
 	cur := currentVersion()
 	updater := newUpdater()
-	// Brand only steers skills sync. updateRun skips that resolution in --check,
-	// where the Updater's zero-value brand retains the Feishu default.
-	if !opts.Check {
+	// Resolve configuration only when skills sync was explicitly requested.
+	if opts.WithSkills {
 		updater.Brand = resolveSkillsBrand(opts.Factory, io.ErrOut)
+	}
+	if !opts.Check {
 		updater.CleanupStaleFiles()
 	}
 	output.PendingNotice = nil
@@ -165,7 +178,7 @@ func updateRun(opts *UpdateOptions) error {
 	// 3. Compare versions
 	if !opts.Force && !update.IsNewer(latest, cur) {
 		var skillsResult *skillscheck.SyncResult
-		if !opts.Check {
+		if opts.WithSkills {
 			skillsResult = runSkillsAndState(updater, io, cur, opts.Force, opts.SkillsLayout)
 			if err := reportSkillsFailure(opts, io, skillsResult); err != nil {
 				return err
@@ -254,7 +267,10 @@ func reportCheckResult(opts *UpdateOptions, io *cmdutil.IOStreams, cur, latest s
 }
 
 func doManualUpdate(opts *UpdateOptions, io *cmdutil.IOStreams, cur, latest string, detect selfupdate.DetectResult, updater *selfupdate.Updater) error {
-	skillsResult := runSkillsAndState(updater, io, cur, opts.Force, opts.SkillsLayout)
+	var skillsResult *skillscheck.SyncResult
+	if opts.WithSkills {
+		skillsResult = runSkillsAndState(updater, io, cur, opts.Force, opts.SkillsLayout)
+	}
 	reason := detect.ManualReason()
 	if opts.JSON {
 		out := map[string]interface{}{
@@ -263,7 +279,7 @@ func doManualUpdate(opts *UpdateOptions, io *cmdutil.IOStreams, cur, latest stri
 			"message": fmt.Sprintf("Automatic update unavailable: %s (path: %s)", reason, detect.ResolvedPath),
 			"url":     releaseURL(latest), "changelog": changelogURL(),
 		}
-		applySkillsResult(out, skillsResult)
+		applySkillsResult(out, skillsResult, opts.WithSkills)
 		if err := reportSkillsFailureWithFields(opts, io, skillsResult, out); err != nil {
 			return err
 		}
@@ -275,9 +291,9 @@ func doManualUpdate(opts *UpdateOptions, io *cmdutil.IOStreams, cur, latest stri
 	fmt.Fprintf(io.ErrOut, "  Release:   %s\n", releaseURL(latest))
 	fmt.Fprintf(io.ErrOut, "  Changelog: %s\n", changelogURL())
 	if detect.Method == selfupdate.InstallPnpm {
-		fmt.Fprintf(io.ErrOut, "\nOr install via pnpm (note: skills will not be synced):\n  pnpm add -g %s@%s\n  pnpm dlx skills add larksuite/cli -y -g   # sync skills separately\n", selfupdate.NpmPackage, latest)
+		fmt.Fprintf(io.ErrOut, "\nOr install via pnpm (note: skills will not be synced):\n  pnpm add -g %s@%s\n  pnpm dlx skills add larksuite/cli -y -g   # optional: sync skills separately\n", selfupdate.NpmPackage, latest)
 	} else {
-		fmt.Fprintf(io.ErrOut, "\nOr install via npm (note: skills will not be synced):\n  npm install -g %s@%s\n  npx skills add larksuite/cli -y -g   # sync skills separately\n", selfupdate.NpmPackage, latest)
+		fmt.Fprintf(io.ErrOut, "\nOr install via npm (note: skills will not be synced):\n  npm install -g %s@%s\n  npx skills add larksuite/cli -y -g   # optional: sync skills separately\n", selfupdate.NpmPackage, latest)
 	}
 	if err := reportSkillsFailure(opts, io, skillsResult); err != nil {
 		return err
@@ -349,7 +365,10 @@ func doAutoUpdate(opts *UpdateOptions, io *cmdutil.IOStreams, cur, latest string
 		return output.ErrBare(output.ExitAPI)
 	}
 
-	skillsResult := runSkillsAndState(updater, io, latest, opts.Force, opts.SkillsLayout)
+	var skillsResult *skillscheck.SyncResult
+	if opts.WithSkills {
+		skillsResult = runSkillsAndState(updater, io, latest, opts.Force, opts.SkillsLayout)
+	}
 	if skillsResult != nil && skillsResult.Err != nil {
 		fields := map[string]interface{}{
 			"previous_version": cur, "current_version": latest,
@@ -357,7 +376,7 @@ func doAutoUpdate(opts *UpdateOptions, io *cmdutil.IOStreams, cur, latest string
 			"message": fmt.Sprintf("lark-cli updated from %s to %s, but skills update failed", cur, latest),
 			"url":     releaseURL(latest), "changelog": changelogURL(),
 		}
-		applySkillsResult(fields, skillsResult)
+		applySkillsResult(fields, skillsResult, opts.WithSkills)
 		if !opts.JSON {
 			fmt.Fprintf(io.ErrOut, "\n%s lark-cli binary updated from %s to %s\n", symOK(), cur, latest)
 			fmt.Fprintf(io.ErrOut, "  Changelog: %s\n", changelogURL())
@@ -372,7 +391,7 @@ func doAutoUpdate(opts *UpdateOptions, io *cmdutil.IOStreams, cur, latest string
 			"message": fmt.Sprintf("lark-cli updated from %s to %s", cur, latest),
 			"url":     releaseURL(latest), "changelog": changelogURL(),
 		}
-		applySkillsResult(result, skillsResult)
+		applySkillsResult(result, skillsResult, opts.WithSkills)
 		output.PrintJson(io.Out, result)
 		return nil
 	}
@@ -405,9 +424,9 @@ func verificationFailureHint(updater *selfupdate.Updater, latest, pm string) str
 		return "the previous version has been restored"
 	}
 	if pm == "pnpm" {
-		return fmt.Sprintf("automatic rollback is unavailable on this platform; reinstall manually (skills will not be synced): pnpm add -g %s@%s && pnpm dlx skills add larksuite/cli -y -g, or download %s", selfupdate.NpmPackage, latest, releaseURL(latest))
+		return fmt.Sprintf("automatic rollback is unavailable on this platform; reinstall manually (skills will not be synced): pnpm add -g %s@%s, or download %s", selfupdate.NpmPackage, latest, releaseURL(latest))
 	}
-	return fmt.Sprintf("automatic rollback is unavailable on this platform; reinstall manually (skills will not be synced): npm install -g %s@%s && npx skills add larksuite/cli -y -g, or download %s", selfupdate.NpmPackage, latest, releaseURL(latest))
+	return fmt.Sprintf("automatic rollback is unavailable on this platform; reinstall manually (skills will not be synced): npm install -g %s@%s, or download %s", selfupdate.NpmPackage, latest, releaseURL(latest))
 }
 
 func runSkillsAndState(updater *selfupdate.Updater, io *cmdutil.IOStreams, stateVersion string, force bool, requestedLayout string) *skillscheck.SyncResult {
@@ -440,7 +459,7 @@ func reportSkillsFailureWithFields(opts *UpdateOptions, io *cmdutil.IOStreams, r
 		return nil
 	}
 	typedErr := errs.NewInternalError(errs.SubtypeUnknown, "skills update failed: %s", result.Err).
-		WithHint("retry with `lark-cli update --force`").
+		WithHint("retry with `lark-cli update --with-skills --force`").
 		WithCause(result.Err)
 	return reportErrorWithFields(opts, io, "skills_update_error", typedErr, fields)
 }
@@ -460,7 +479,7 @@ func reportAlreadyUpToDate(opts *UpdateOptions, io *cmdutil.IOStreams, cur, late
 		if check {
 			applySkillsStatus(out, cur)
 		} else {
-			applySkillsResult(out, skillsResult)
+			applySkillsResult(out, skillsResult, opts.WithSkills)
 		}
 		output.PrintJson(io.Out, out)
 		return nil
@@ -497,8 +516,10 @@ func applySkillsStatus(env map[string]interface{}, target string) {
 	env["skills_status"] = status
 }
 
-func applySkillsResult(env map[string]interface{}, r *skillscheck.SyncResult) {
+func applySkillsResult(env map[string]interface{}, r *skillscheck.SyncResult, requested bool) {
 	switch {
+	case !requested:
+		env["skills_action"] = "skipped"
 	case r == nil:
 		env["skills_action"] = "in_sync"
 	case r.Err != nil:
@@ -540,7 +561,7 @@ func emitSkillsTextHints(io *cmdutil.IOStreams, r *skillscheck.SyncResult) {
 		if len(r.Failed) > 0 {
 			fmt.Fprintf(io.ErrOut, "  Failed skills: %s\n", strings.Join(r.Failed, ", "))
 		}
-		fmt.Fprintf(io.ErrOut, "  To retry all official skills: lark-cli update --force\n")
+		fmt.Fprintf(io.ErrOut, "  To retry all official skills: lark-cli update --with-skills --force\n")
 	case r.Warning != "":
 		fmt.Fprintf(io.ErrOut, "%s Skills updated using %s layout\n", symOK(), r.Layout)
 		fmt.Fprintf(io.ErrOut, "%s %s\n", symWarn(), r.Warning)

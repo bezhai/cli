@@ -25,14 +25,14 @@ type StaleNotice struct {
 
 // Message returns a single-line, AI-agent-parseable description of the
 // drift plus the canonical fix command. Mirrors internal/update.UpdateInfo.Message
-// in style ("..., run: lark-cli update" suffix). Current is guaranteed
+// in style ("..., run: lark-cli update --with-skills" suffix). Current is guaranteed
 // non-empty because Init only emits a StaleNotice after a completed sync.
 func (s *StaleNotice) Message() string {
 	if s.OfficialUnknown {
-		return "lark-cli skills were installed from a fallback source; official completeness is unknown, run: lark-cli update"
+		return "lark-cli skills were installed from a fallback source; official completeness is unknown, run: lark-cli update --with-skills"
 	}
 	return fmt.Sprintf(
-		"lark-cli skills %s out of sync with binary %s, run: lark-cli update",
+		"lark-cli skills %s out of sync with binary %s, run: lark-cli update --with-skills",
 		s.Current, s.Target,
 	)
 }

@@ -170,7 +170,7 @@ func setupNotices(plan *surface.Plan) {
 			}
 		}()
 
-		// Skills drift has only one recovery action: lark-cli update. Do not
+		// Skills drift recovery requires lark-cli update --with-skills. Do not
 		// even inspect local drift state when that action is absent.
 		initializeSkillsCheck(build.Version)
 	}
@@ -188,8 +188,7 @@ func setupNotices(plan *surface.Plan) {
 func composePendingNotice(plan *surface.Plan) map[string]interface{} {
 	notice := map[string]interface{}{}
 	canUpdate := plan.CanReference(surface.CommandUpdate)
-	// Update and skills-drift notices have no recovery path of their own:
-	// both exist solely to steer the caller to `lark-cli update`.
+	// Both notices require the update command; skills sync is explicit.
 	if canUpdate {
 		if info := update.GetPending(); info != nil {
 			notice["update"] = map[string]interface{}{
@@ -204,7 +203,7 @@ func composePendingNotice(plan *surface.Plan) map[string]interface{} {
 				"current": stale.Current,
 				"target":  stale.Target,
 				"message": stale.Message(),
-				"command": "lark-cli update",
+				"command": "lark-cli update --with-skills",
 			}
 			if stale.OfficialUnknown {
 				entry["official_unknown"] = true
@@ -219,7 +218,7 @@ func composePendingNotice(plan *surface.Plan) map[string]interface{} {
 		}
 		if canUpdate {
 			entry["message"] = dep.Message()
-			entry["action"] = "lark-cli update"
+			entry["action"] = "lark-cli update --with-skills"
 		}
 		if dep.Replacement != "" {
 			entry["replacement"] = dep.Replacement

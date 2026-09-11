@@ -6,6 +6,8 @@
 
 [中文版](./README.zh.md) | [English](./README.md)
 
+> This is a personal fork. See [fork build and update instructions](FORK.md) for the patched version; the upstream npm package does not contain these changes.
+
 The official [Lark/Feishu](https://www.larksuite.com/) CLI tool, maintained by the [larksuite](https://github.com/larksuite) team — built for humans and AI Agents. Covers core business domains including Messenger, Docs, Base, Sheets, Slides, Calendar, Mail, Tasks, Meetings, Markdown, and more, with 200+ commands and 26 AI Agent [Skills](./skills/).
 
 [Install](#installation--quick-start) · [AI Agent Skills](#agent-skills) · [Auth](#authentication) · [Commands](#three-layer-command-system) · [Advanced](#advanced-usage) · [Enterprise](#personal-or-enterprise) · [Security](#security--risk-warnings-read-before-use) · [Contributing](#contributing)
@@ -84,7 +86,7 @@ git clone https://github.com/larksuite/cli.git
 cd cli
 make install
 
-# Install CLI SKILL (required)
+# Optional: install agent skills
 npx skills add larksuite/cli -y -g
 ```
 
@@ -134,6 +136,10 @@ lark-cli auth status
 ```
 
 ## Agent Skills
+
+Skills are optional. In this fork, the installation wizard and `lark-cli update` leave global skills untouched by default. Pass `--with-skills` to explicitly install or sync official skills. `update --skills-layout separate|suite` also requires `--with-skills`; `--check` cannot be combined with `--with-skills`.
+
+For `update --json`, `skills_action: "skipped"` means skills synchronization was not requested; it does not imply that existing skills are current.
 
 | Skill                           | Description                                                                                                    |
 | ------------------------------- |----------------------------------------------------------------------------------------------------------------|

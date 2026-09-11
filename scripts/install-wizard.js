@@ -367,14 +367,18 @@ async function main() {
   if (isInteractive) {
     p.intro(msg.setup);
     await stepInstallGlobally(msg);
-    await stepInstallSkills(msg);
+    if (process.argv.slice(3).includes("--with-skills")) {
+      await stepInstallSkills(msg);
+    }
     await stepConfigInit(msg, lang);
     await stepAuthLogin(msg);
     p.outro(msg.done);
   } else {
     console.log(msg.setup);
     await stepInstallGlobally(msg);
-    await stepInstallSkills(msg);
+    if (process.argv.slice(3).includes("--with-skills")) {
+      await stepInstallSkills(msg);
+    }
     console.log(msg.nonTtyHint);
   }
 }

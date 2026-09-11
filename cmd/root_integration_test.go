@@ -815,12 +815,12 @@ func TestSetupNotices_Drift(t *testing.T) {
 	if skills["current"] != "1.0.20" || skills["target"] != "1.0.21" {
 		t.Errorf("notice.skills = %+v, want {current:\"1.0.20\", target:\"1.0.21\"}", skills)
 	}
-	want := "lark-cli skills 1.0.20 out of sync with binary 1.0.21, run: lark-cli update"
+	want := "lark-cli skills 1.0.20 out of sync with binary 1.0.21, run: lark-cli update --with-skills"
 	if msg, _ := skills["message"].(string); msg != want {
 		t.Errorf("notice.skills.message = %q, want %q", msg, want)
 	}
-	if cmd, _ := skills["command"].(string); cmd != "lark-cli update" {
-		t.Errorf("notice.skills.command = %q, want %q", cmd, "lark-cli update")
+	if cmd, _ := skills["command"].(string); cmd != "lark-cli update --with-skills" {
+		t.Errorf("notice.skills.command = %q, want %q", cmd, "lark-cli update --with-skills")
 	}
 }
 
@@ -879,8 +879,8 @@ func TestSetupNotices_BothUpdateAndSkills(t *testing.T) {
 	if !ok {
 		t.Fatalf("notice.skills missing or wrong type: %+v", notice)
 	}
-	if cmd, _ := sk["command"].(string); cmd != "lark-cli update" {
-		t.Errorf("notice.skills.command = %q, want %q", cmd, "lark-cli update")
+	if cmd, _ := sk["command"].(string); cmd != "lark-cli update --with-skills" {
+		t.Errorf("notice.skills.command = %q, want %q", cmd, "lark-cli update --with-skills")
 	}
 }
 

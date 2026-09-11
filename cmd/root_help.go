@@ -137,7 +137,7 @@ Use "{{.CommandPath}} [command] --help" for more information about a command.{{e
 // setup. It is emitted only while skills/read remains referenceable.
 const skillsSetupFooter = `{{if not .HasParent}}
 
-Skills setup (one-time, humans): npx skills add larksuite/cli -g -y — https://github.com/larksuite/cli#agent-skills{{end}}`
+Optional skills setup (one-time, humans): npx skills add larksuite/cli -g -y — https://github.com/larksuite/cli#agent-skills{{end}}`
 
 var rootUsageTemplate = renderRootUsageTemplate(nil)
 

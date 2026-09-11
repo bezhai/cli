@@ -16,8 +16,10 @@ LARKSUITE_CLI_NO_UPDATE_NOTIFIER=1 LARKSUITE_CLI_NO_SKILLS_NOTIFIER=1 <lark-cli 
 lark-cli update
 ```
 
-**重要**：始终使用 `lark-cli update` 更新，它会同时更新 CLI 和 AI Skills。
+本 fork 的 `lark-cli update` 默认只处理 CLI，不安装或同步 AI Skills。用户明确需要同步官方 Skills 时，使用 `lark-cli update --with-skills`；首次同步会安装完整官方列表。`--force` 本身不启用 Skills 同步。
+
+本 fork 目前通过源码分发；保留 fork 修改时，应拉取自己的分支并执行 `make build`。现有 npm 包和二进制下载链接仍属于上游。
 
 另外两类 notice：
-- `_notice.skills`：本地 Skills 与当前 CLI 不同步。
-- `_notice.deprecated_command`：本次使用了兼容保留的旧命令；后续调用改用 `replacement`。如果同时提供 `action: "lark-cli update"`，同样建议升级。
+- `_notice.skills`：本地 Skills 与当前 CLI 不同步；只有用户需要同步时，才执行 `command` 中的显式同步命令。
+- `_notice.deprecated_command`：本次使用了兼容保留的旧命令；后续调用改用 `replacement`。如果同时提供 `action: "lark-cli update --with-skills"`，同样建议升级。

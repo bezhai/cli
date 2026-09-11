@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -165,7 +166,7 @@ func TestUpdatePnpm_Human(t *testing.T) {
 	t.Setenv("LARKSUITE_CLI_CONFIG_DIR", t.TempDir())
 	f, _, stderr := newTestFactory(t)
 	cmd := NewCmdUpdate(f)
-	cmd.SetArgs([]string{})
+	cmd.SetArgs([]string{"--with-skills"})
 	origFetch := fetchLatest
 	fetchLatest = func() (string, error) { return "2.0.0", nil }
 	defer func() { fetchLatest = origFetch }()
@@ -414,7 +415,7 @@ func TestUpdateNpm_Human(t *testing.T) {
 
 	f, _, stderr := newTestFactory(t)
 	cmd := NewCmdUpdate(f)
-	cmd.SetArgs([]string{})
+	cmd.SetArgs([]string{"--with-skills"})
 
 	origFetch := fetchLatest
 	fetchLatest = func() (string, error) { return "2.0.0", nil }
@@ -772,8 +773,8 @@ func TestUpdateNpmVerifyFail_JSON_NoRestoreHintWhenBackupUnavailable(t *testing.
 	if !strings.Contains(out, "skills will not be synced") {
 		t.Errorf("expected skills-not-synced warning in rollback hint, got: %s", out)
 	}
-	if !strings.Contains(out, "npx skills add larksuite/cli -y -g") {
-		t.Errorf("expected npx skills add hint for skills sync, got: %s", out)
+	if strings.Contains(out, "skills add") {
+		t.Errorf("binary recovery must not include a skills install command, got: %s", out)
 	}
 }
 
@@ -1035,7 +1036,7 @@ func TestUpdateNpm_SkillsSuccess_JSON(t *testing.T) {
 	t.Setenv("LARKSUITE_CLI_CONFIG_DIR", t.TempDir())
 	f, stdout, _ := newTestFactory(t)
 	cmd := NewCmdUpdate(f)
-	cmd.SetArgs([]string{"--json"})
+	cmd.SetArgs([]string{"--with-skills", "--json"})
 
 	origFetch := fetchLatest
 	fetchLatest = func() (string, error) { return "2.0.0", nil }
@@ -1063,7 +1064,7 @@ func TestUpdateNpm_SkillsFail_JSON(t *testing.T) {
 	t.Setenv("LARKSUITE_CLI_CONFIG_DIR", t.TempDir())
 	f, stdout, _ := newTestFactory(t)
 	cmd := NewCmdUpdate(f)
-	cmd.SetArgs([]string{"--json"})
+	cmd.SetArgs([]string{"--with-skills", "--json"})
 
 	origFetch := fetchLatest
 	fetchLatest = func() (string, error) { return "2.0.0", nil }
@@ -1097,7 +1098,7 @@ func TestUpdateNpm_SkillsFail_Human(t *testing.T) {
 	t.Setenv("LARKSUITE_CLI_CONFIG_DIR", t.TempDir())
 	f, _, stderr := newTestFactory(t)
 	cmd := NewCmdUpdate(f)
-	cmd.SetArgs([]string{})
+	cmd.SetArgs([]string{"--with-skills"})
 
 	origFetch := fetchLatest
 	fetchLatest = func() (string, error) { return "2.0.0", nil }
@@ -1128,7 +1129,7 @@ func TestUpdateManual_SkillsFail_JSONStillReportsManualUpdate(t *testing.T) {
 	t.Setenv("LARKSUITE_CLI_CONFIG_DIR", t.TempDir())
 	f, stdout, _ := newTestFactory(t)
 	cmd := NewCmdUpdate(f)
-	cmd.SetArgs([]string{"--json"})
+	cmd.SetArgs([]string{"--with-skills", "--json"})
 
 	origFetch := fetchLatest
 	fetchLatest = func() (string, error) { return "2.0.0", nil }
@@ -1161,6 +1162,7 @@ func TestUpdateManual_SkillsFail_HumanStillReportsManualUpdate(t *testing.T) {
 	t.Setenv("LARKSUITE_CLI_CONFIG_DIR", t.TempDir())
 	f, _, stderr := newTestFactory(t)
 	cmd := NewCmdUpdate(f)
+	cmd.SetArgs([]string{"--with-skills"})
 
 	origFetch := fetchLatest
 	fetchLatest = func() (string, error) { return "2.0.0", nil }
@@ -1407,7 +1409,7 @@ func TestUpdateRun_AlreadyLatest_RunsSkillsSync(t *testing.T) {
 	}
 
 	f, _, _ := newTestFactory(t)
-	opts := &UpdateOptions{Factory: f, JSON: true}
+	opts := &UpdateOptions{Factory: f, JSON: true, WithSkills: true}
 	if err := updateRun(opts); err != nil {
 		t.Fatalf("updateRun() err = %v, want nil", err)
 	}
@@ -1452,7 +1454,7 @@ func TestUpdateRun_Manual_RunsSkillsSync(t *testing.T) {
 	}
 
 	f, _, _ := newTestFactory(t)
-	opts := &UpdateOptions{Factory: f, JSON: true}
+	opts := &UpdateOptions{Factory: f, JSON: true, WithSkills: true}
 	if err := updateRun(opts); err != nil {
 		t.Fatalf("updateRun() err = %v, want nil", err)
 	}
@@ -1501,7 +1503,7 @@ func TestUpdateRun_Npm_RunsSkillsSync_WritesLatestState(t *testing.T) {
 	}
 
 	f, _, _ := newTestFactory(t)
-	opts := &UpdateOptions{Factory: f, JSON: true}
+	opts := &UpdateOptions{Factory: f, JSON: true, WithSkills: true}
 	if err := updateRun(opts); err != nil {
 		t.Fatalf("updateRun() err = %v, want nil", err)
 	}
@@ -1819,7 +1821,7 @@ func TestUpdateCommand_RealSkillsSyncRewritesState(t *testing.T) {
 	}
 
 	// Phase 3: Mock version functions so the update command believes it has
-	// upgraded from 1.0.19 to 1.0.20, then execute "lark-cli update --json".
+	// upgraded from 1.0.19 to 1.0.20, then execute "lark-cli update --with-skills --json".
 	// This triggers SyncSkills which calls the real npx skills add command.
 	origFetch := fetchLatest
 	origVersion := currentVersion
@@ -1829,7 +1831,7 @@ func TestUpdateCommand_RealSkillsSyncRewritesState(t *testing.T) {
 
 	f, stdout, _ := newTestFactory(t)
 	cmd := NewCmdUpdate(f)
-	cmd.SetArgs([]string{"--json"})
+	cmd.SetArgs([]string{"--with-skills", "--json"})
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("lark-cli update --json err = %v, want nil", err)
 	}
@@ -1908,7 +1910,7 @@ func TestUpdateCommand_SkillsSyncColdStart(t *testing.T) {
 	}
 
 	// Phase 3: Mock version functions so the update command believes it is at
-	// v1.0.20, then execute "lark-cli update --json". This triggers SyncSkills
+	// v1.0.20, then execute "lark-cli update --with-skills --json". This triggers SyncSkills
 	// which calls the real npx skills add command.
 	origFetch := fetchLatest
 	origVersion := currentVersion
@@ -1918,7 +1920,7 @@ func TestUpdateCommand_SkillsSyncColdStart(t *testing.T) {
 
 	f, stdout, _ := newTestFactory(t)
 	cmd := NewCmdUpdate(f)
-	cmd.SetArgs([]string{"--json"})
+	cmd.SetArgs([]string{"--with-skills", "--json"})
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("lark-cli update --json err = %v, want nil", err)
 	}
@@ -2042,5 +2044,116 @@ func TestResolveSkillsBrand_RespectsActiveProfile(t *testing.T) {
 	}
 	if errBuf.Len() != 0 {
 		t.Errorf("unexpected notice: %q", errBuf.String())
+	}
+}
+
+func TestUpdateWithoutSkillsLeavesGlobalSkillsUntouched(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		method selfupdate.InstallMethod
+		latest string
+		force  bool
+		action string
+	}{
+		{"already current", selfupdate.InstallManual, "1.0.0", false, "already_up_to_date"},
+		{"manual", selfupdate.InstallManual, "2.0.0", false, "manual_required"},
+		{"npm", selfupdate.InstallNpm, "2.0.0", false, "updated"},
+		{"pnpm", selfupdate.InstallPnpm, "2.0.0", false, "updated"},
+		{"force", selfupdate.InstallNpm, "1.0.0", true, "updated"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, existingState := range []bool{false, true} {
+				t.Run(fmt.Sprintf("existing state=%t", existingState), func(t *testing.T) {
+					t.Setenv("LARKSUITE_CLI_CONFIG_DIR", t.TempDir())
+					f, stdout, stderr := newTestFactory(t)
+					if existingState {
+						if err := skillscheck.WriteState(skillscheck.SkillsState{Version: "0.9.0", OfficialSkills: []string{"lark-calendar"}}); err != nil {
+							t.Fatal(err)
+						}
+					}
+					before, _, err := skillscheck.ReadState()
+					if err != nil {
+						t.Fatal(err)
+					}
+					origFetch, origVersion, origNew, origSync := fetchLatest, currentVersion, newUpdater, syncSkills
+					t.Cleanup(func() {
+						fetchLatest, currentVersion, newUpdater, syncSkills = origFetch, origVersion, origNew, origSync
+					})
+					fetchLatest = func() (string, error) { return tc.latest, nil }
+					currentVersion = func() string { return "1.0.0" }
+					syncSkills = func(skillscheck.SyncOptions) *skillscheck.SyncResult {
+						t.Fatal("skills sync must require --with-skills")
+						return nil
+					}
+					installs := 0
+					newUpdater = func() *selfupdate.Updater {
+						u := selfupdate.New()
+						u.DetectOverride = func() selfupdate.DetectResult {
+							return selfupdate.DetectResult{Method: tc.method, NpmAvailable: true, PnpmAvailable: true, ResolvedPath: "/fixture/lark-cli"}
+						}
+						install := func(version string) *selfupdate.NpmResult {
+							installs++
+							if version != tc.latest {
+								t.Fatalf("install version = %q", version)
+							}
+							return &selfupdate.NpmResult{}
+						}
+						u.NpmInstallOverride, u.PnpmInstallOverride = install, install
+						u.VerifyOverride = func(string) error { return nil }
+						return u
+					}
+					cmd := NewCmdUpdate(f)
+					args := []string{"--json"}
+					if tc.force {
+						args = append(args, "--force")
+					}
+					cmd.SetArgs(args)
+					if err := cmd.Execute(); err != nil {
+						t.Fatal(err)
+					}
+					var result map[string]interface{}
+					if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+						t.Fatal(err)
+					}
+					if result["ok"] != true || result["action"] != tc.action || result["skills_action"] != "skipped" {
+						t.Fatalf("unexpected update result: %v", result)
+					}
+					if tc.action == "updated" && installs != 1 {
+						t.Fatalf("installs = %d, want 1", installs)
+					}
+					after, readable, err := skillscheck.ReadState()
+					if err != nil || readable != existingState || !reflect.DeepEqual(before, after) {
+						t.Fatalf("skills state changed: before=%+v after=%+v readable=%t err=%v", before, after, readable, err)
+					}
+					if strings.Contains(stderr.String(), "syncing skills") {
+						t.Fatalf("unexpected skills notice: %s", stderr.String())
+					}
+				})
+			}
+		})
+	}
+}
+
+func TestUpdateSkillsOptInValidationBeforeNetwork(t *testing.T) {
+	for _, tc := range []struct {
+		args  []string
+		param string
+	}{
+		{[]string{"--check", "--with-skills"}, "--with-skills"},
+		{[]string{"--skills-layout", "suite"}, "--skills-layout"},
+	} {
+		t.Run(strings.Join(tc.args, " "), func(t *testing.T) {
+			f, _, _ := newTestFactory(t)
+			origFetch := fetchLatest
+			t.Cleanup(func() { fetchLatest = origFetch })
+			fetchLatest = func() (string, error) { t.Fatal("validation must precede network"); return "", nil }
+			cmd := NewCmdUpdate(f)
+			cmd.SetArgs(tc.args)
+			err := cmd.Execute()
+			var validation *errs.ValidationError
+			if !errors.As(err, &validation) || validation.Param != tc.param || validation.Subtype != errs.SubtypeInvalidArgument {
+				t.Fatalf("unexpected validation error: %#v", err)
+			}
+		})
 	}
 }
